@@ -189,3 +189,9 @@ dialog h2 { font-size: 1.25rem; margin-bottom: 14px; }
 .members-inputs { display: grid; gap: 8px; }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; scroll-behavior: auto !important; } }
+
+@media (max-width: 520px) {
+  .switcher label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .switcher select { max-width: 150px; min-height: 44px; }
+  .topbar { gap: 8px; padding-inline: 12px; }
+}
