@@ -10,7 +10,7 @@ const app = r('js/app.js').replace(/^import .*$/gm, '');
 const css = r('css/styles.css');
 const html = `<title>RoomSync</title>
 <style>${css}
-:root { color-scheme: light; } body { background: #f6f5f1; color: #1f2a30; }</style>
+:root { color-scheme: light; } body { background: #FFFACD; color: #1B3A32; }</style>
 <a class="skip-link" href="#main">Skip to main content</a>
 <div id="app"><p class="boot" role="status">Loading RoomSync…</p></div>
 <div id="toasts" aria-live="polite" aria-atomic="false"></div>
