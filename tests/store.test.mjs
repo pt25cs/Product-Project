@@ -227,3 +227,14 @@ test('deleting a chore keeps completed history and removes open occurrences', ()
   assert.ok(s.undoLast());
   assert.ok(s.state.occurrences.some((o) => o.id === open.id));
 });
+
+test('taking over a claimed shopping item is one atomic step', () => {
+  const { s } = fresh(); s.startDemo();
+  const [m, j] = ['Maya', 'Jordan'].map((n) => id(s, n));
+  const soap = s.sel.needed().find((i) => i.name === 'Dish soap');
+  s.setCurrentUser(j); s.claimItem(soap.id);
+  s.setCurrentUser(m);
+  assert.equal(s.claimItem(soap.id).ok, false);
+  assert.ok(s.takeOverItem(soap.id).ok);
+  assert.equal(s.state.shopping.find((i) => i.id === soap.id).buyerId, m);
+});

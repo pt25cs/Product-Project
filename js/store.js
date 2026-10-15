@@ -392,6 +392,11 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       return { ok: true };
     });
   }
+  function takeOverItem(id) {
+    const item = state.shopping.find((s) => s.id === id);
+    if (!item || item.status !== 'needed' || item.buyerId === me()) return { ok: false };
+    return mutate(() => { item.buyerId = me(); logActivity('took over buying', item.name, '#/money/shopping'); return { ok: true }; });
+  }
   /** Mark purchased; optionally create the linked expense in the same atomic step. */
   function purchaseItem(id, { expense = null } = {}) {
     const item = state.shopping.find((s) => s.id === id);
@@ -606,7 +611,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     createHousehold, startDemo, setCurrentUser,
     addChore, editChore, reassignChore, completeChore, undoComplete, deleteChore,
     addExpense, editExpense, deleteExpense, addReimbursement, deleteReimbursement,
-    addItem, editItem, deleteItem, claimItem, purchaseItem, reopenItem,
+    addItem, editItem, deleteItem, claimItem, takeOverItem, purchaseItem, reopenItem,
     addEvent, editEvent, deleteEvent,
     setRead, markAllRead, setPrefs, undoLast, runReminders: () => { if (generateReminders()) { save(); emit(); } },
     exportAnalytics: () => JSON.stringify({ household: state.household.id, mode: state.mode, exportedAt: nowISO(), events: state.analytics, completions: state.occurrences.filter((o) => o.doneAt).map((o) => ({ title: o.title, due: o.due, doneAt: o.doneAt, doneBy: o.doneBy, assigneeId: o.assigneeId })) }, null, 2),

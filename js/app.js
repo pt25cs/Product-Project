@@ -464,7 +464,7 @@ const actions = {
   'delete-item': (d) => { const i = byId(store.state.shopping, d.id); confirmDialog({ title: 'Remove this item?', message: `Remove <strong>${esc(i.name)}</strong> from the shopping list?`, confirmLabel: 'Remove item', onConfirm: () => { store.deleteItem(d.id); afterDelete(); } }); },
   claim: (d) => { const r = store.claimItem(d.id); toast(r.ok ? 'You’re getting this one.' : r.error || 'Could not claim.', { error: !r.ok }); },
   unclaim: (d) => { store.claimItem(d.id, false); },
-  takeover: (d) => { const i = byId(store.state.shopping, d.id); store.claimItem(d.id, false); store.claimItem(d.id, true); toast(`You’re now getting ${i.name}.`); },
+  takeover: (d) => { const i = byId(store.state.shopping, d.id); if (store.takeOverItem(d.id).ok) toast(`You’re now getting ${i.name}.`); },
   purchase: (d) => openPurchaseForm(byId(store.state.shopping, d.id)),
   'reopen-item': (d) => { store.reopenItem(d.id); },
   'add-event': () => openEventForm(null),
