@@ -18,6 +18,7 @@ npm test             # logic tests (money split, rotation, balances, reminders, 
 PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.demo.mjs            # demo scenario, keyboard, responsive sweep
 PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.chore-details.mjs   # chore details dialog
 PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.refresh.mjs         # quick add, calendar date strip, Add menu, empty states
+PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.refinement.mjs      # Home previews, nav label, mobile header, calendar entry points, copy
 ```
 
 ## Design system

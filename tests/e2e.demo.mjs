@@ -19,6 +19,7 @@ const step = (s) => console.log('✓', s);
 const st = (fn, arg) => page.evaluate(fn, arg);
 const nav = (label) => page.getByRole('navigation', { name: 'Primary' }).last().getByRole('link', { name: label });
 const addMenu = async (item) => { await page.getByRole('button', { name: 'Add', exact: true }).click(); await page.getByRole('menuitem', { name: item }).click(); };
+const switchTo = async (n) => { if (!(await page.locator('#switch-user').isVisible())) await page.locator('.status > summary').click(); await page.getByLabel('Viewing as').selectOption({ label: n }); };
 const toastGone = () => page.evaluate(() => document.querySelectorAll('#toasts .toast').forEach((t) => t.remove()));
 
 // 1. demo entry
@@ -26,8 +27,7 @@ await page.goto(BASE);
 await page.getByRole('button', { name: /Try the demo/ }).click();
 await page.getByRole('heading', { name: 'Today', level: 1 }).waitFor();
 await page.getByText(/Good (morning|afternoon|evening), Maya/).waitFor();
-assert.equal(await page.locator('#switch-user').inputValue().then((v) => st((id) => window.__roomsync.nameOf(id), v)), 'Maya');
-await page.getByText('Demo · Saved on this device').waitFor();
+await page.getByText('Demo · Viewing as Maya').waitFor();
 // first useful task visible without scrolling on a phone
 const trashBox = await page.getByRole('checkbox', { name: 'Complete: Take out trash & recycling' }).boundingBox();
 assert.ok(trashBox && trashBox.y + trashBox.height < 844, 'first chore should be on the first screen');
@@ -60,7 +60,7 @@ step('2-3. complete → dashboard/history update → undo restores; one next occ
 
 // 4/5. shopping purchase → one linked expense; balances; split preview
 await nav('Expenses & Shopping').click();
-await page.getByRole('link', { name: 'Shopping', exact: true }).click();
+await page.getByRole('link', { name: /^Shopping/ }).click();
 await page.getByRole('button', { name: 'Claim Dish soap' }).click();
 await page.getByText('You’re getting this').first().waitFor();
 await page.getByRole('checkbox', { name: 'Purchased: Dish soap' }).click();
@@ -129,7 +129,7 @@ await page.getByText('Mon').first().waitFor();
 step('7. event added (validation error near field, values kept), edited, visible in agenda and week views');
 
 // 8/9. switch roommate; notifications
-await page.getByLabel('Viewing as').selectOption({ label: 'Jordan' });
+await switchTo('Jordan');
 await nav('Home').click();
 await page.getByText(/Good (morning|afternoon|evening), Jordan/).waitFor();
 await page.getByText('Deep-clean kitchen').first().waitFor();
@@ -144,7 +144,7 @@ assert.equal(await st(() => window.__roomsync.sel.unread()), unread0 - 1, 'follo
 await shot('06-notifications-mobile');
 await page.getByRole('dialog').waitFor(); // notification link opens the event
 await page.keyboard.press('Escape');
-await page.getByLabel('Viewing as').selectOption({ label: 'Maya' });
+await switchTo('Maya');
 step('8-9. Jordan sees his own chores/notifications; opening a notification marks it read and navigates; switched back');
 
 // 10. persistence

@@ -164,3 +164,12 @@ export function describeEventTime(ev) {
   if (sd === ed) return `${fmtDay(sd)} · ${fmtTime(dtTime(ev.start))}–${fmtTime(dtTime(ev.end))}`;
   return `${fmtDay(sd)} ${fmtTime(dtTime(ev.start))} → ${fmtDay(ed)} ${fmtTime(dtTime(ev.end))}`;
 }
+
+/** Display-only wording fix for text persisted by older builds ("payback" -> "repayment"). Never written back to storage. */
+export function displayCopy(text) {
+  return String(text ?? '').replace(/\bpay-?backs?\b/gi, (m) => {
+    const plural = /s$/i.test(m);
+    const w = plural ? 'repayments' : 'repayment';
+    return m[0] === m[0].toUpperCase() ? w[0].toUpperCase() + w.slice(1) : w;
+  });
+}

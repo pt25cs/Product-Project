@@ -253,3 +253,19 @@ test('adding a purchased item again creates a fresh needed item without touching
   assert.ok(s.addItemAgain(old.id).duplicate, 'second click does not duplicate');
   assert.equal(s.sel.needed().filter((i) => i.name === old.name).length, 1);
 });
+
+test('legacy "payback" wording is normalised for display only', () => {
+  assert.equal(L.displayCopy('recorded a payback of'), 'recorded a repayment of');
+  assert.equal(L.displayCopy('Payback recorded: Maya → Jordan'), 'Repayment recorded: Maya → Jordan');
+  assert.equal(L.displayCopy('3 paybacks'), '3 repayments');
+  assert.equal(L.displayCopy('repayment stays'), 'repayment stays');
+  assert.equal(L.displayCopy(undefined), '');
+});
+
+test('demo fixtures do not contradict their own dates', () => {
+  const { s } = fresh(); s.startDemo();
+  const weekdays = /\b(mon|tues?|wednes|thurs?|fri|satur|sun)day?s?\b/i;
+  for (const o of s.state.occurrences) assert.ok(!weekdays.test(o.notes), `chore note names a weekday: ${o.notes}`);
+  for (const e of s.state.events) assert.ok(!/weekend/i.test(e.title), `event title implies a weekday range: ${e.title}`);
+  assert.ok(s.state.events.some((e) => e.creatorId === id(s, 'Sam') && e.category === 'away'));
+});

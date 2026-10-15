@@ -114,28 +114,30 @@ function shopRowCompact(i) {
 }
 
 // ---------- Home ----------
+const PREVIEW = 3; // practical preview length for the available layout (not a research-derived number)
+const moreLink = (n, shown, href, label) => (n > shown ? `<a class="more-link" href="${href}">${label} (${n})</a>` : '');
 function viewHome() {
   const s = store.state, t = today(), me = store.me();
   const hr = new Date().getHours();
   const greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
   const mine = store.sel.mine();
   const overdueMine = mine.filter((o) => o.due < t), dueToday = mine.filter((o) => o.due === t);
-  const upcoming = mine.filter((o) => o.due > t).slice(0, 5);
+  const upcomingAll = mine.filter((o) => o.due > t), upcoming = upcomingAll.slice(0, PREVIEW);
   const others = store.sel.overdue().filter((o) => o.assigneeId !== me);
   const needed = store.sel.needed();
-  const events = store.sel.upcomingEvents(14).slice(0, 4);
+  const events = store.sel.upcomingEvents(14);
   const feed = s.activity.slice(0, 5);
   const list = (arr) => `<ul class="list">${arr.map((o) => choreRow(o, { ctx: 'h' })).join('')}</ul>`;
   const todayBody = dueToday.length ? list(dueToday)
-    : `<div class="empty"><strong>${ic('check', 16)} You’re all caught up today</strong>${upcoming.length ? `Next up: ${esc(upcoming[0].title)}, ${L.fmtDay(upcoming[0].due)}.` : 'Nothing is assigned to you right now.'}</div>`;
+    : `<div class="empty"><strong>${ic('check', 16)} You’re all caught up today</strong>${upcomingAll.length ? `Next up: ${esc(upcomingAll[0].title)}, ${L.fmtDay(upcomingAll[0].due)}.` : 'Nothing is assigned to you right now.'}</div>`;
   const mainCol = `<div data-o="1">${overdueMine.length ? sec('over', 'Overdue', list(overdueMine), { count: overdueMine.length, danger: true, icon: 'alert' }) : ''}
       ${sec('today', 'Today', todayBody + addRow('add-chore', 'Add chore'), { count: dueToday.length || null })}
-      ${upcoming.length ? sec('up', 'Upcoming', list(upcoming), { count: upcoming.length, right: '<a href="#/chores/mine">All your chores</a>' }) : ''}</div>
-    ${others.length ? `<div data-o="5">${sec('others', 'Needs attention in the household', `<ul class="list">${others.map((o) => choreRow(o, { ctx: 'o', owner: true })).join('')}</ul>`, { count: others.length, right: '<a href="#/chores/all">All chores</a>' })}</div>` : ''}
-    <div data-o="6">${sec('act', 'Recent activity', feed.length ? `<ul class="feed">${feed.map((a) => `<li><a href="${esc(a.link)}"><strong>${esc(who(a.actorId))}</strong> ${esc(a.verb)} ${esc(a.subject)}</a><time datetime="${a.ts}">${ago(a.ts)}</time></li>`).join('')}</ul>` : empty('No activity yet', 'Completed chores, purchases and changes show up here.'))}</div>`;
-  const sideCol = `<div data-o="2" class="sec"><div class="panel-soft"><div class="sec-head" style="border:0;padding:0 0 8px"><h2>Your balance</h2><a href="#/money/expenses">Expenses</a></div>${balanceBlock()}</div></div>
-    <div data-o="3">${sec('ev', 'Coming up', events.length ? `<ul class="list">${events.map(eventRow).join('')}</ul>` : empty('Nothing planned', 'Add quiet time, guests or plans so everyone knows.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>'), { right: '<a href="#/calendar">Calendar</a>' })}</div>
-    <div data-o="4">${sec('shop', 'Shopping list', needed.length ? `<ul class="list">${needed.slice(0, 4).map(shopRowCompact).join('')}</ul>${needed.length > 4 ? `<p class="small muted" style="padding-top:8px">+ ${needed.length - 4} more</p>` : ''}` : empty('Nothing needed', 'Add something when the apartment runs low.', '<br><button type="button" class="btn sm" data-action="add-item">Add item</button>'), { count: needed.length || null, right: '<a href="#/money/shopping">Open list</a>' })}</div>`;
+      ${upcomingAll.length ? sec('up', 'Your upcoming chores', list(upcoming) + moreLink(upcomingAll.length, upcoming.length, '#/chores/mine', 'See all your chores'), { count: upcomingAll.length }) : ''}</div>
+    ${others.length ? `<div data-o="2">${sec('others', 'Past due in the household', `<ul class="list">${others.slice(0, PREVIEW).map((o) => choreRow(o, { ctx: 'o', owner: true })).join('')}</ul>${moreLink(others.length, PREVIEW, '#/chores/all', 'See all chores')}`, { count: others.length })}</div>` : ''}
+    <div data-o="6">${disclosure('activity', 'Recent activity', feed.length ? `<ul class="feed">${feed.map((a) => `<li><a href="${esc(a.link)}"><strong>${esc(who(a.actorId))}</strong> ${esc(L.displayCopy(a.verb))} ${esc(L.displayCopy(a.subject))}</a><time datetime="${a.ts}">${ago(a.ts)}</time></li>`).join('')}</ul>` : empty('No activity yet', 'Completed chores, purchases and changes show up here.'))}</div>`;
+  const sideCol = `<div data-o="3" class="sec"><div class="panel-soft"><div class="sec-head" style="border:0;padding:0 0 8px"><h2>Your balance</h2><a href="#/money/expenses">Expenses</a></div>${balanceBlock()}</div></div>
+    <div data-o="4">${sec('ev', 'Household plans', events.length ? `<ul class="list">${events.slice(0, PREVIEW).map(eventRow).join('')}</ul>${moreLink(events.length, PREVIEW, '#/calendar', 'See calendar')}` : empty('Nothing planned', 'Add quiet time, guests or plans so everyone knows.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>'), { count: events.length || null, right: '<a href="#/calendar">Calendar</a>' })}</div>
+    <div data-o="5">${sec('shop', 'Shopping list', needed.length ? `<ul class="list">${needed.slice(0, PREVIEW).map(shopRowCompact).join('')}</ul>${moreLink(needed.length, PREVIEW, '#/money/shopping', 'See the full list')}` : empty('Nothing needed', 'Add something when the apartment runs low.', '<br><button type="button" class="btn sm" data-action="add-item">Add item</button>'), { count: needed.length || null, right: '<a href="#/money/shopping">Open list</a>' })}</div>`;
   return `<div class="page-head"><div><h1>Today</h1><p class="sub">${greet}, ${esc(name(me))} · ${L.fmtDay(t)}</p></div></div><div class="dash"><div class="dash-col">${mainCol}</div><div class="dash-col">${sideCol}</div></div>`;
 }
 
@@ -162,7 +164,7 @@ function viewChores(tab) {
 
 // ---------- Expenses & shopping ----------
 function viewMoney(tab) {
-  const tabsNav = `<nav class="tabs" aria-label="Expenses and shopping"><a href="#/money/expenses"${tab === 'expenses' ? ' aria-current="page"' : ''}>Expenses</a><a href="#/money/shopping"${tab === 'shopping' ? ' aria-current="page"' : ''}>Shopping</a></nav>`;
+  const tabsNav = `<nav class="tabs" aria-label="Expenses and shopping"><a href="#/money/expenses"${tab === 'expenses' ? ' aria-current="page"' : ''}>Expenses</a><a href="#/money/shopping"${tab === 'shopping' ? ' aria-current="page"' : ''}>Shopping${store.sel.needed().length ? `<span class="count" style="margin-left:6px">${store.sel.needed().length}<span class="sr-only"> needed</span></span>` : ''}</a></nav>`;
   if (tab === 'shopping') {
     const needed = store.sel.needed(), bought = store.sel.purchased();
     const row = (i) => {
@@ -184,6 +186,7 @@ function viewMoney(tab) {
       ${disclosure('bought', `Purchased <span class="count">${bought.length}</span>`, bought.length ? `<ul class="list">${bought.map(histRow).join('')}</ul>` : empty('Nothing purchased yet', 'Purchased items are kept here so you can add them again.'))}`;
   }
   const s = store.state, me = store.me(), bal = store.sel.balances();
+  const owesSomeone = store.sel.settlements().some((x) => x.from === me); // the balance panel already offers a prefilled repayment
   const hist = [...s.expenses.map((e) => ({ k: 'e', d: e.date, c: e.createdAt, v: e })), ...s.reimbursements.map((r) => ({ k: 'r', d: r.date, c: r.createdAt, v: r }))].sort((a, b) => b.d.localeCompare(a.d) || b.c.localeCompare(a.c));
   const expRow = (e) => {
     const share = e.splits[me];
@@ -198,7 +201,7 @@ function viewMoney(tab) {
   const balances = `<table><caption class="sr-only">Net balance by roommate</caption><thead><tr><th scope="col">Roommate</th><th scope="col" class="num">Balance</th></tr></thead><tbody>${s.members.map((m) => `<tr><th scope="row">${avatar(m.id)} ${esc(m.name)}${m.id === me ? ' (you)' : ''}</th><td class="num">${bal[m.id] > 0 ? `Is owed ${money(bal[m.id])}` : bal[m.id] < 0 ? `Owes ${money(-bal[m.id])}` : 'Settled up'}</td></tr>`).join('')}</tbody></table>`;
   return `<div class="page-head"><h1>Expenses &amp; shopping</h1></div>${tabsNav}
     <div class="sec"><div class="panel-soft"><h2 style="margin-bottom:8px">Your balance</h2>${balanceBlock({ full: true })}</div></div>
-    ${sec('hist', 'Expenses and repayments', (hist.length ? `<ul class="list">${hist.map((h) => (h.k === 'e' ? expRow(h.v) : reRow(h.v))).join('')}</ul>` : empty('No expenses yet', 'Add the first shared expense, like utilities or groceries.')) + addRow('add-expense', 'Add expense') + addRow('add-reimb', 'Record repayment'))}
+    ${sec('hist', 'Expenses and repayments', (hist.length ? `<ul class="list">${hist.map((h) => (h.k === 'e' ? expRow(h.v) : reRow(h.v))).join('')}</ul>` : empty('No expenses yet', 'Add the first shared expense, like utilities or groceries.')) + addRow('add-expense', 'Add expense') + (owesSomeone ? '' : addRow('add-reimb', 'Record repayment')))}
     ${sec('tot', `Household spending in ${L.fmtMonth(today()).split(' ')[0]}`, `<p class="balance-line money" style="padding-top:12px">${money(store.sel.monthTotal())}</p><p class="hint">Expenses dated this month. Repayments aren’t counted as spending.</p>`)}
     ${disclosure('balances', 'Everyone’s balance', balances)}`;
 }
@@ -218,7 +221,7 @@ function viewCalendar() {
   const ws = L.startOfWeek(sel), days = Array.from({ length: 7 }, (_, i) => L.addDays(ws, i));
   const meta = (d) => ({ evs: store.sel.eventsOn(d), occs: store.sel.occsOn(d) });
   const bar = `<div class="cal-bar"><div class="cal-title"><h2>${L.fmtMonth(sel)}</h2><button type="button" class="icon-btn sm" data-action="cal-shift" data-delta="-7" aria-label="Previous week">${ic('chevL', 18)}</button><button type="button" class="icon-btn sm" data-action="cal-shift" data-delta="7" aria-label="Next week">${ic('chevR', 18)}</button><button type="button" class="btn quiet sm" data-action="cal-today">Today</button></div>
-    <div class="seg" role="group" aria-label="Calendar view"><label><input type="radio" name="calview" value="agenda" data-action="cal-view" data-view="agenda"${view === 'agenda' ? ' checked' : ''}><span>Agenda</span></label><label><input type="radio" name="calview" value="week" data-action="cal-view" data-view="week"${view === 'week' ? ' checked' : ''}><span>Week</span></label></div></div>`;
+    <div class="cal-tools"><div class="seg" role="group" aria-label="Calendar view"><label><input type="radio" name="calview" value="agenda" data-action="cal-view" data-view="agenda"${view === 'agenda' ? ' checked' : ''}><span>Agenda</span></label><label><input type="radio" name="calview" value="week" data-action="cal-view" data-view="week"${view === 'week' ? ' checked' : ''}><span>Week</span></label></div><button type="button" class="btn primary" data-action="add-event">${ic('plus', 18)}Add event</button></div></div>`;
   let body;
   if (view === 'agenda') {
     const strip = `<div class="date-strip" role="group" aria-label="Week of ${L.fmtMonthDay(ws)}">${days.map((d) => {
@@ -238,13 +241,14 @@ function viewCalendar() {
       ${evs.map((e) => `<button type="button" class="ag-row" data-action="view-event" data-id="${e.id}"><span class="ag-time">${rangeLabel(e, d)}</span><span class="ag-ic cat-${e.category}">${ic(CAT_ICON[e.category], 15)}</span><span><span class="ag-title">${esc(e.title)}</span><span class="ag-sub" style="display:block">${esc(L.CATEGORIES[e.category].label)} · ${esc(who(e.creatorId))}</span></span></button>`).join('')}
       ${occs.map((o) => `<button type="button" class="ag-row" data-action="view-chore" data-id="${o.id}"><span class="ag-time">Chore</span><span class="ag-ic chore">${ic('chores', 15)}</span><span><span class="ag-title${o.doneAt ? ' done' : ''}">${esc(o.title)}</span><span class="ag-sub" style="display:block">${esc(who(o.assigneeId))}${o.doneAt ? ' · Done' : ''}</span></span></button>`).join('')}
       ${!evs.length && !occs.length ? '<p class="small muted" style="padding:12px 0">Nothing planned</p>' : ''}</section>`).join('');
-    body = `${strip}${any ? rows : rows + empty('Nothing on the calendar', 'Add quiet time, guests, an away day or a household plan.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>')}`;
+    const anchor = `<p class="ag-anchor">Showing the next 14 days from <strong>${L.fmtFull(sel)}</strong>${sel === t ? ' (today)' : ''}. Pick another day above to start the agenda there.${sel !== t ? ' <button type="button" class="btn quiet sm" data-action="cal-today">Back to today</button>' : ''}</p>`;
+    body = `${strip}${anchor}${any ? rows : rows + empty('Nothing on the calendar', 'Add quiet time, guests, an away day or a household plan.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>')}`;
   } else {
     body = `<div class="week">${days.map((d) => {
       const { evs, occs } = meta(d), none = !evs.length && !occs.length;
       return `<section class="wk-day${d === t ? ' today' : ''}${d < t ? ' past' : ''}" aria-label="${L.fmtFull(d)}"><button type="button" class="wk-head" data-action="cal-open-day" data-date="${d}" aria-label="Open ${L.fmtFull(d)} in agenda"><span>${L.fmtWeekday(d)}</span><span class="dn">${parseInt(d.slice(8), 10)}</span></button>
-        ${evs.map((e) => `<button type="button" class="wk-item cat-${e.category}" data-action="view-event" data-id="${e.id}"><span class="t">${ic(CAT_ICON[e.category], 12)}${L.fmtTime(L.dtTime(e.start))}</span><span class="n">${esc(e.title)}</span></button>`).join('')}
-        ${occs.map((o) => `<button type="button" class="wk-item chore${o.doneAt ? ' is-done' : ''}" data-action="view-chore" data-id="${o.id}"><span class="t">${ic('chores', 12)}${esc(who(o.assigneeId))}</span><span class="n">${esc(o.title)}</span></button>`).join('')}
+        ${evs.map((e) => `<button type="button" class="wk-item cat-${e.category}" data-action="view-event" data-id="${e.id}" title="${esc(e.title)}"><span class="t">${ic(CAT_ICON[e.category], 12)}${L.fmtTime(L.dtTime(e.start))}</span><span class="n">${esc(e.title)}</span></button>`).join('')}
+        ${occs.map((o) => `<button type="button" class="wk-item chore${o.doneAt ? ' is-done' : ''}" data-action="view-chore" data-id="${o.id}" title="${esc(o.title)}"><span class="t">${ic('chores', 12)}${esc(who(o.assigneeId))}</span><span class="n">${esc(o.title)}</span></button>`).join('')}
         ${none ? '<span class="wk-none">Nothing planned</span>' : ''}</section>`;
     }).join('')}</div>`;
   }
@@ -256,7 +260,7 @@ function viewNotifications() {
   const list = store.sel.notifications();
   const groups = ['Today', 'Yesterday', 'Earlier'].map((g) => [g, list.filter((n) => dayBucket(n.createdAt) === g)]).filter(([, v]) => v.length);
   const row = (n) => `<li class="notif ${n.read ? 'read' : 'unread'}"><span class="ndot" aria-hidden="true"></span>
-    <a class="n-main" href="${esc(n.link)}" data-action="open-notif" data-id="${n.id}"><span class="sr-only">${n.read ? 'Read: ' : 'Unread: '}</span><div class="n-title">${esc(n.title)}</div>${n.body ? `<div class="n-body">${esc(n.body)}</div>` : ''}<time>${ago(n.createdAt)}</time></a>
+    <a class="n-main" href="${esc(n.link)}" data-action="open-notif" data-id="${n.id}"><span class="sr-only">${n.read ? 'Read: ' : 'Unread: '}</span><div class="n-title">${esc(L.displayCopy(n.title))}</div>${n.body ? `<div class="n-body">${esc(L.displayCopy(n.body))}</div>` : ''}<time>${ago(n.createdAt)}</time></a>
     ${menu({ id: `n-${n.id}`, label: 'More actions for this notification', items: [{ label: n.read ? 'Mark as unread' : 'Mark as read', icon: 'check', action: 'toggle-read', data: { id: n.id } }] })}</li>`;
   const unread = list.filter((n) => !n.read).length;
   return `<div class="page-head"><div><h1>Notifications</h1><p class="sub">${unread ? `${unread} unread` : 'All caught up'} · for ${esc(name(store.me()))}</p></div><div class="head-actions"><button type="button" class="btn" data-action="read-all"${unread ? '' : ' disabled'}>Mark all read</button><a class="btn quiet" href="#/settings">Reminder settings</a></div></div>
@@ -521,7 +525,7 @@ document.addEventListener('toggle', (e) => { const k = e.target.dataset?.key; if
 document.addEventListener('submit', (e) => { const f = e.target; if (f.dataset.inline) { e.preventDefault(); handleInlineForm(f); } });
 
 // ---------- shell & render ----------
-const NAV = [['home', '#/home', 'Home', 'home', 'Home'], ['chores', '#/chores/mine', 'Chores', 'chores', 'Chores'], ['money', '#/money/expenses', 'Expenses & Shopping', 'money', 'Expenses'], ['calendar', '#/calendar', 'Calendar', 'calendar', 'Calendar']];
+const NAV = [['home', '#/home', 'Home', 'home', 'Home'], ['chores', '#/chores/mine', 'Chores', 'chores', 'Chores'], ['money', '#/money/expenses', 'Expenses & Shopping', 'money', 'Expenses & Shopping'], ['calendar', '#/calendar', 'Calendar', 'calendar', 'Calendar']];
 const TITLES = { home: 'Home', chores: 'Chores', money: 'Expenses & Shopping', calendar: 'Calendar', notifications: 'Notifications', settings: 'Settings' };
 const ADD_ITEMS = [{ label: 'Chore', icon: 'chores', action: 'add-chore' }, { label: 'Expense', icon: 'money', action: 'add-expense' }, { label: 'Shopping item', icon: 'cart', action: 'add-item' }, { label: 'Event', icon: 'calendar', action: 'add-event' }];
 function render() {
@@ -544,14 +548,18 @@ function render() {
   const navLinks = (side) => NAV.map(([k, href, label, icon, short]) => `<a ${side ? 'class="nav"' : ''} href="${href}"${k === key ? ' aria-current="page"' : ''} aria-label="${esc(label)}">${ic(icon, side ? 20 : 22)}<span aria-hidden="true">${side ? label : short}</span></a>`).join('');
   const bell = `<a class="icon-link" href="#/notifications" aria-label="Notifications${unread ? `, ${unread} unread` : ''}"${key === 'notifications' ? ' aria-current="page"' : ''}>${ic('bell', 20)}${unread ? `<span class="badge-count" aria-hidden="true">${unread > 9 ? '9+' : unread}</span>` : ''}</a>`;
   const gear = `<a class="icon-link" href="#/settings" aria-label="Settings"${key === 'settings' ? ' aria-current="page"' : ''}>${ic('gear', 20)}</a>`;
-  const viewer = (cls) => `<div class="${cls}"><label class="viewer-label" for="switch-user">Viewing as</label>${isNarrow ? avatar(s.currentUserId) : ''}<select id="switch-user" data-change="switch-user">${s.members.map((m) => `<option value="${m.id}"${m.id === s.currentUserId ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>`;
-  const household = `<a class="household" href="#/home" title="${esc(s.household.name)}"><span class="logo">${ic('home', 16)}</span><span class="t">${esc(s.household.name)}</span></a>`;
-  const status = `<div class="statusbar"><details class="status"><summary>${ic('info', 14)}<span class="dot" aria-hidden="true"></span>${s.mode === 'demo' ? 'Demo' : 'Local'} · Saved on this device</summary><div class="panel"><strong style="color:var(--color-text)">${s.mode === 'demo' ? 'Demo household' : 'Local household'}</strong><ul><li>Everything is stored in this browser. It doesn’t sync to other devices.</li><li>“Viewing as” previews each roommate. There are no accounts yet.</li><li>Notifications show inside RoomSync only.</li></ul></div></details></div>`;
+  const household = `<a class="household" href="#/home" title="${esc(s.household.name)}" aria-label="${esc(s.household.name)}, home"><span class="logo">${ic('home', 16)}</span><span class="t">${esc(s.household.name)}</span></a>`;
+  const viewerSelect = (label) => `<label for="switch-user">${label}</label><select id="switch-user" data-change="switch-user">${s.members.map((m) => `<option value="${m.id}"${m.id === s.currentUserId ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>`;
+  const modeName = s.mode === 'demo' ? 'Demo' : 'Local';
+  // Phones: the roommate switcher lives inside the demo controls so the header stays quiet; the chip still names who you are viewing as.
+  const status = `<div class="statusbar"><details class="status"><summary>${ic('info', 14)}<span class="dot" aria-hidden="true"></span>${isNarrow ? `${modeName} · Viewing as ${esc(name(s.currentUserId))}` : `${modeName} · Saved on this device`}</summary><div class="panel"><strong style="color:var(--color-text)">${s.mode === 'demo' ? 'Demo household' : 'Local household'} · ${esc(s.household.name)}</strong>
+    ${isNarrow ? `<div class="panel-viewer">${viewerSelect('Viewing as')}<p class="hint">Preview each roommate’s view. This isn’t a login.</p></div>` : ''}
+    <ul><li>Saved on this device only. It doesn’t sync to other devices.</li><li>${isNarrow ? 'Switching roommates previews their chores and balance.' : '“Viewing as” previews each roommate. There are no accounts yet.'}</li><li>Notifications show inside RoomSync only.</li></ul></div></details></div>`;
   const sidebar = `<aside class="sidebar" aria-label="Sidebar"><div class="side-head">${household}</div>
     <div class="side-viewer"><label for="switch-user">Viewing as</label><div class="side-tools"><select id="switch-user" data-change="switch-user">${s.members.map((m) => `<option value="${m.id}"${m.id === s.currentUserId ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>${bell}${gear}</div></div>
     ${menu({ id: 'add-side', label: 'Add to household', icon: 'plus', text: 'Add', cls: 'nav-add', items: ADD_ITEMS })}
     <nav aria-label="Primary">${navLinks(true)}</nav><div class="side-foot">${status}</div></aside>`;
-  const topbar = `<header class="topbar">${household}${viewer('viewer')}${bell}${gear}</header>`;
+  const topbar = `<header class="topbar">${household}${bell}${gear}</header>`;
   app.innerHTML = `<div class="shell">${isNarrow ? '' : sidebar}
     <div class="main-col">${isNarrow ? topbar : ''}
       ${store.saveError ? `<div class="banner-error" role="alert">Couldn’t save to this browser (storage may be full or blocked). Recent changes will be lost if you close or refresh this page.</div>` : ''}

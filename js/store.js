@@ -590,7 +590,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     const ev = (title, category, creatorId, start, end, notes = '') => state.events.push({ id: uid('ev'), title, category, creatorId, start, end, notes, createdAt: iso(-1, 9) });
     ev('Quiet study block (midterm review)', 'quiet', priya, lt(1, 19), lt(1, 22), 'Please keep the living room quiet.');
     ev('Jordan’s friend visiting', 'guest', jordan, lt(2, 18), lt(2, 21), 'Just FYI. They’ll be hanging out in the living room.');
-    ev('Sam away for the weekend', 'away', sam, lt(4, 8), lt(6, 20));
+    ev('Sam away (visiting family)', 'away', sam, lt(4, 8), lt(6, 20));
     ev('Apartment dinner', 'plans', maya, lt(3, 19, 30), lt(3, 21, 30), 'Pasta night. Everyone welcome!');
 
     // Activity (newest first)
