@@ -111,7 +111,7 @@ test('shopping: claim, purchase with linked expense, no duplicates, balances', (
   assert.equal(after[m] - before[m], 1001 - 251); // payer share is 251 (10.01/4 -> 251,250,250,250)
   assert.equal(after[j] - before[j], -250);
   assert.equal(Object.values(after).reduce((a, c) => a + c, 0), 0);
-  assert.ok(s.state.notifications.some((n) => n.userId === j && n.type === 'expense' && /your share \$2\.50/.test(n.body)));
+  assert.ok(s.state.notifications.some((n) => n.userId === j && n.type === 'expense' && /Your share: \$2\.50/.test(n.body)));
   // delete the expense -> balances revert, item stays purchased
   const e = s.state.expenses.find((x) => x.shoppingItemId === soap.id);
   s.deleteExpense(e.id);
@@ -192,4 +192,38 @@ test('week stats count by roommate for the selected week', () => {
   assert.equal(st.length, 4);
   const total = st.reduce((a, x) => a + x.completed + x.pending, 0);
   assert.ok(total > 0);
+});
+
+test('reminders for a completed chore are removed even if already read', () => {
+  const { s } = fresh(); s.startDemo();
+  const jordan = id(s, 'Jordan');
+  const kitchen = s.sel.overdue()[0];
+  const n = s.state.notifications.find((x) => x.key === `overdue:${kitchen.id}` && x.userId === jordan);
+  assert.ok(n); s.setCurrentUser(jordan); s.setRead(n.id, true);
+  s.completeChore(kitchen.id);
+  assert.ok(!s.state.notifications.some((x) => x.key === `overdue:${kitchen.id}`));
+  s.runReminders();
+  assert.ok(!s.state.notifications.some((x) => x.key === `overdue:${kitchen.id}`), 'not regenerated while completed');
+});
+
+test('notification and activity wording is concrete (no filler)', () => {
+  const { s } = fresh(); s.startDemo();
+  const m = id(s, 'Maya'), j = id(s, 'Jordan');
+  s.addExpense({ description: 'Wifi', amount: '90.00', date: s.today(), payerId: m, participantIds: [m, j] });
+  const n = s.state.notifications.find((x) => x.userId === j && /Wifi/.test(x.title));
+  assert.equal(n.title, 'Maya added Wifi.');
+  assert.equal(n.body, 'Your share: $45.00 of $90.00');
+  assert.ok(!s.state.notifications.some((x) => /Friendly reminder/.test(x.body)));
+  assert.equal(s.state.activity[0].verb, 'added the expense');
+});
+
+test('deleting a chore keeps completed history and removes open occurrences', () => {
+  const { s } = fresh(); s.startDemo();
+  const vac = s.state.occurrences.find((o) => o.title.startsWith('Vacuum') && o.doneAt);
+  const open = s.state.occurrences.find((o) => o.choreId === vac.choreId && !o.doneAt);
+  assert.ok(s.deleteChore(open.id).ok);
+  assert.ok(s.state.occurrences.some((o) => o.id === vac.id), 'history kept');
+  assert.ok(!s.state.occurrences.some((o) => o.id === open.id));
+  assert.ok(s.undoLast());
+  assert.ok(s.state.occurrences.some((o) => o.id === open.id));
 });

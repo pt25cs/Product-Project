@@ -13,24 +13,27 @@ Open the page and click **Try demo household** (you start as Maya). Use **Viewin
 
 Run the checks:
 ```bash
-npm test             # 13 logic tests (money split, rotation, balances, reminders, persistence…)
+npm test             # logic tests (money split, rotation, balances, reminders, persistence…) + design-token contrast checks
 # Optional browser walkthrough of the demo scenario (needs Playwright + Chromium, app running):
 PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.demo.mjs
 ```
 
-## Demo walkthrough (all verified by `tests/e2e.demo.mjs`)
-1. Click **Try demo household** → dashboard as Maya.
-2. Tap the circle next to **Take out trash & recycling** (due today) → complete. Undo is offered.
+## Design system
+Neutral canvas (`#F8FAFC`), white surfaces, slate text, one indigo accent (`#4F46E5`), semantic green/amber/red. All colors are semantic CSS tokens at the top of `css/styles.css` (`--color-*`); `tests/contrast.test.mjs` checks the real token pairs against WCAG contrast ratios. Controls, buttons, dialogs, menus, chips and rows share one set of primitives (`js/ui.js` + CSS). Status never relies on color alone (icons, text labels, state on checkboxes).
+
+## Demo walkthrough (verified by `tests/e2e.demo.mjs`)
+1. Click **Try the demo** → dashboard as Maya.
+2. Tick the checkbox next to **Take out trash & recycling** (due today) → complete. Undo is offered.
 3. Dashboard updates; **Chores → Completed** shows who/when and “On time”. The next weekly occurrence is created once, assigned to the next person in rotation (Jordan).
-4. **Expenses & Shopping → Shopping**: Claim **Dish soap** → **Mark purchased** → enter price (e.g. 10.01) → saves purchase + linked expense (double-clicks can’t duplicate it).
+4. **Expenses & Shopping → Shopping**: **Claim** Dish soap → **Purchased** → enter the price (e.g. 10.01) → saves the purchase + one linked expense (double-clicks can’t duplicate it).
 5. **Expenses** tab: balances recalculate (shares are exact to the cent; leftover cents go to the earliest roommate in household order).
-6. **Calendar → Add event** (Quiet / study).
+6. **Calendar → Add event** (Quiet / study). Mobile opens on an agenda of today and upcoming; Week view is one tap away.
 7. Switch **Viewing as → Jordan**: notification bell shows the new expense share and the calendar change; Home shows shared activity.
 
 ## What works
 - Create a household (name, roommates, optional starter chores) or open the seeded demo household.
 - Chores: create/edit/delete, one-time or weekly, manual (re)assignment, optional round-robin rotation (current & next assignee shown), one-tap complete + undo, completion history with who/when and on-time marker, My / All / Completed views, per-roommate counts for a selected week (not a fairness score).
-- Expenses: equal split among chosen participants in integer cents, edit/delete with recalculated balances, “settle up” suggestions, recorded paybacks (**does not move money**), current-month total.
+- Expenses: equal split among chosen participants in integer cents, edit/delete with recalculated balances, “settle up” suggestions, recorded repayments (**does not move money**), current-month total.
 - Shopping: items with quantity/notes/buyer, claim, purchased history, optional linked expense with price + split participants.
 - Calendar: week view + upcoming list; Away / Quiet-study / Guests / Household plans; creator-only edit/delete; dated chores displayed alongside events (read from chore records, not duplicated).
 - Notifications: new assignments, due-soon/overdue chore reminders (deduped; cleared when completed), new shared expenses, event changes; read/unread; links to the record; reminder preferences.

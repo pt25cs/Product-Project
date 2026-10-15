@@ -83,7 +83,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     if (state.notifications.length > 500) state.notifications.length = 500;
   }
   const dropReminders = (occId) => {
-    state.notifications = state.notifications.filter((n) => !(n.key && (n.key === `due:${occId}` || n.key === `overdue:${occId}`) && !n.read));
+    state.notifications = state.notifications.filter((n) => !(n.key && (n.key === `due:${occId}` || n.key === `overdue:${occId}`)));
   };
 
   /** In-app reminders only: evaluated while the app is open. Deduped by (user, key). */
@@ -96,12 +96,12 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       const p = prefsOf(occ.assigneeId);
       if (!p.reminders) continue;
       const days = L.diffDays(t, occ.due);
-      let key = null, title = '';
-      if (days < 0) { key = `overdue:${occ.id}`; title = `"${occ.title}" is overdue`; }
-      else if (days <= p.leadDays) { key = `due:${occ.id}`; title = `"${occ.title}" is due ${days === 0 ? 'today' : days === 1 ? 'tomorrow' : L.fmtDay(occ.due)}`; }
+      let key = null, title = '', body = '';
+      if (days < 0) { key = `overdue:${occ.id}`; title = `${occ.title} was due ${L.fmtDay(occ.due)}.`; body = 'Still open and assigned to you.'; }
+      else if (days <= p.leadDays) { key = `due:${occ.id}`; title = `${occ.title} is due ${days === 0 ? 'today' : days === 1 ? 'tomorrow' : L.fmtDay(occ.due)}.`; body = 'Assigned to you.'; }
       if (!key) continue;
       if (state.notifications.some((n) => n.userId === occ.assigneeId && n.key === key)) continue;
-      state.notifications.unshift({ id: uid('n'), userId: occ.assigneeId, type: days < 0 ? 'chore_overdue' : 'chore_due', title, body: 'Friendly reminder from RoomSync.', link: `#/chores/all?id=${occ.id}`, key, read: false, createdAt: nowISO() });
+      state.notifications.unshift({ id: uid('n'), userId: occ.assigneeId, type: days < 0 ? 'chore_overdue' : 'chore_due', title, body, link: `#/chores/all?id=${occ.id}`, key, read: false, createdAt: nowISO() });
       created++;
     }
     return created;
@@ -174,8 +174,8 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       state.chores.push({ id: choreId, title, notes: trimmed(d.notes), recurrence: d.recurrence, rotation, createdBy: me(), createdAt: nowISO() });
       state.occurrences.push({ id: occId, choreId, title, notes: trimmed(d.notes), due: d.due, assigneeId: d.assigneeId, rotIdx: rotation.indexOf(d.assigneeId), doneBy: null, doneAt: null, nextOccId: null });
       track('chore_assigned', { assigneeId: d.assigneeId, recurrence: d.recurrence, rotating: rotation.length > 0 });
-      logActivity('added chore', title, `#/chores/all?id=${occId}`);
-      notify([d.assigneeId], { type: 'chore_assigned', title: `New chore for you: ${title}`, body: `${nameOf(me())} assigned this to you · ${L.relativeDue(d.due, today())}`, link: `#/chores/all?id=${occId}`, key: `assign:${occId}:${d.assigneeId}` });
+      logActivity('added the chore', title, `#/chores/all?id=${occId}`);
+      notify([d.assigneeId], { type: 'chore_assigned', title: `${nameOf(me())} assigned you ${title}.`, body: L.relativeDue(d.due, today()), link: `#/chores/all?id=${occId}`, key: `assign:${occId}:${d.assigneeId}` });
       return { ok: true, id: occId };
     });
   }
@@ -195,10 +195,10 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       }
       Object.assign(occ, { title, notes: trimmed(d.notes), due: d.due, assigneeId: d.assigneeId });
       // keep other open occurrences of this chore (none normally) in sync on title only
-      logActivity('updated chore', title, `#/chores/all?id=${occ.id}`);
+      logActivity('updated the chore', title, `#/chores/all?id=${occ.id}`);
       if (prevAssignee !== d.assigneeId) {
         track('chore_assigned', { assigneeId: d.assigneeId, reassigned: true });
-        notify([d.assigneeId], { type: 'chore_assigned', title: `Chore assigned to you: ${title}`, body: `${nameOf(me())} updated this chore · ${L.relativeDue(d.due, today())}`, link: `#/chores/all?id=${occ.id}`, key: `assign:${occ.id}:${d.assigneeId}` });
+        notify([d.assigneeId], { type: 'chore_assigned', title: `${nameOf(me())} assigned you ${title}.`, body: L.relativeDue(d.due, today()), link: `#/chores/all?id=${occ.id}`, key: `assign:${occ.id}:${d.assigneeId}` });
       }
       return { ok: true };
     });
@@ -211,7 +211,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       occ.assigneeId = assigneeId;
       track('chore_assigned', { assigneeId, reassigned: true });
       logActivity('reassigned', `${occ.title} to ${nameOf(assigneeId)}`, `#/chores/all?id=${occ.id}`);
-      notify([assigneeId], { type: 'chore_assigned', title: `Chore assigned to you: ${occ.title}`, body: `${nameOf(me())} reassigned this · ${L.relativeDue(occ.due, today())}`, link: `#/chores/all?id=${occ.id}`, key: `assign:${occ.id}:${assigneeId}` });
+      notify([assigneeId], { type: 'chore_assigned', title: `${nameOf(me())} reassigned ${occ.title} to you.`, body: L.relativeDue(occ.due, today()), link: `#/chores/all?id=${occ.id}`, key: `assign:${occ.id}:${assigneeId}` });
       return { ok: true };
     });
   }
@@ -237,7 +237,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       }
       track('chore_completed', { onTime: t <= occ.due, due: occ.due, completedAt: occ.doneAt, assigneeId: occ.assigneeId });
       logActivity('completed', occ.title, '#/chores/done', occ.id);
-      if (next) notify([next.assigneeId], { type: 'chore_assigned', title: `You're up next: ${next.title}`, body: `Due ${L.fmtDay(next.due)} (weekly rotation)`, link: `#/chores/all?id=${next.id}`, key: `assign:${next.id}:${next.assigneeId}` });
+      if (next) notify([next.assigneeId], { type: 'chore_assigned', title: `You're up next: ${next.title}.`, body: `Due ${L.fmtDay(next.due)}`, link: `#/chores/all?id=${next.id}`, key: `assign:${next.id}:${next.assigneeId}` });
       return { ok: true };
     });
   }
@@ -267,7 +267,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       state.occurrences = state.occurrences.filter((o) => !open.includes(o.id));
       state.chores = state.chores.filter((c) => c.id !== occ.choreId);
       state.notifications = state.notifications.filter((n) => !(n.key && open.some((id) => n.key.includes(id))));
-      logActivity('deleted chore', title, '#/chores/all');
+      logActivity('deleted the chore', title, '#/chores/all');
       return { ok: true };
     }, `Deleted “${title}”`);
   }
@@ -291,9 +291,9 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     const exp = { id: uid('e'), description: b.description, amountCents: b.cents, date: d.date, payerId: d.payerId, participantIds: b.participantIds, splits: b.splits, createdBy: me(), createdAt: nowISO(), ...extra };
     state.expenses.push(exp);
     track('expense_created', { amountCents: b.cents, participants: b.participantIds.length, linkedToShopping: !!extra.shoppingItemId });
-    logActivity('added expense', `${b.description} (${L.fmtMoney(b.cents)})`, `#/money/expenses?id=${exp.id}`);
+    logActivity('added the expense', `${b.description} (${L.fmtMoney(b.cents)})`, `#/money/expenses?id=${exp.id}`);
     for (const pid of b.participantIds) {
-      notify([pid], { type: 'expense', title: `New shared expense: ${b.description}`, body: `${nameOf(d.payerId)} paid ${L.fmtMoney(b.cents)} · your share ${L.fmtMoney(b.splits[pid])}`, link: `#/money/expenses?id=${exp.id}` });
+      notify([pid], { type: 'expense', title: `${nameOf(d.payerId)} added ${b.description}.`, body: `Your share: ${L.fmtMoney(b.splits[pid])} of ${L.fmtMoney(b.cents)}`, link: `#/money/expenses?id=${exp.id}` });
     }
     return exp;
   }
@@ -310,8 +310,8 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     if (Object.keys(b.e).length) return { ok: false, errors: b.e };
     return mutate(() => {
       Object.assign(exp, { description: b.description, amountCents: b.cents, date: d.date, payerId: d.payerId, participantIds: b.participantIds, splits: b.splits, updatedAt: nowISO() });
-      logActivity('edited expense', `${b.description} (${L.fmtMoney(b.cents)})`, `#/money/expenses?id=${exp.id}`);
-      notify(b.participantIds, { type: 'expense', title: `Expense updated: ${b.description}`, body: `${nameOf(exp.payerId)} paid ${L.fmtMoney(b.cents)}`, link: `#/money/expenses?id=${exp.id}` });
+      logActivity('edited the expense', `${b.description} (${L.fmtMoney(b.cents)})`, `#/money/expenses?id=${exp.id}`);
+      for (const pid of b.participantIds) notify([pid], { type: 'expense', title: `${nameOf(me())} updated ${b.description}.`, body: `Your share: ${L.fmtMoney(b.splits[pid])} of ${L.fmtMoney(b.cents)}`, link: `#/money/expenses?id=${exp.id}` });
       return { ok: true };
     });
   }
@@ -321,7 +321,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     return mutate(() => {
       state.expenses = state.expenses.filter((x) => x.id !== id);
       state.shopping.forEach((s) => { if (s.expenseId === id) s.expenseId = null; });
-      logActivity('deleted expense', exp.description, '#/money/expenses');
+      logActivity('deleted the expense', exp.description, '#/money/expenses');
       return { ok: true };
     }, `Deleted expense “${exp.description}”`);
   }
@@ -339,15 +339,15 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     return mutate(() => {
       const r = { id: uid('r'), fromId: d.fromId, toId: d.toId, amountCents: cents, date: d.date, note: trimmed(d.note), createdBy: me(), createdAt: nowISO(), ...(d.token ? { token: d.token } : {}) };
       state.reimbursements.push(r);
-      logActivity('recorded a payback', `${nameOf(r.fromId)} → ${nameOf(r.toId)} ${L.fmtMoney(cents)}`, '#/money/expenses');
-      notify([r.fromId, r.toId], { type: 'expense', title: `Payback recorded: ${nameOf(r.fromId)} → ${nameOf(r.toId)}`, body: `${L.fmtMoney(cents)} paid outside RoomSync`, link: '#/money/expenses' });
+      logActivity('recorded a repayment of', `${L.fmtMoney(cents)} from ${nameOf(r.fromId)} to ${nameOf(r.toId)}`, '#/money/expenses');
+      notify([r.fromId, r.toId], { type: 'expense', title: `${nameOf(me())} recorded a repayment: ${nameOf(r.fromId)} paid ${nameOf(r.toId)} ${L.fmtMoney(cents)}.`, body: 'Paid outside RoomSync.', link: '#/money/expenses' });
       return { ok: true };
     });
   }
   function deleteReimbursement(id) {
     const r = state.reimbursements.find((x) => x.id === id);
     if (!r) return { ok: false };
-    return mutate(() => { state.reimbursements = state.reimbursements.filter((x) => x.id !== id); return { ok: true }; }, 'Deleted recorded payback');
+    return mutate(() => { state.reimbursements = state.reimbursements.filter((x) => x.id !== id); return { ok: true }; }, 'Deleted repayment');
   }
 
   // ---------- shopping ----------
@@ -366,7 +366,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     if (Object.keys(e).length) return { ok: false, errors: e };
     return mutate(() => {
       state.shopping.push({ id: uid('s'), name, qty, notes: trimmed(d.notes), buyerId: d.buyerId || null, status: 'needed', purchasedBy: null, purchasedAt: null, expenseId: null, createdBy: me(), createdAt: nowISO() });
-      logActivity('added to shopping list', name, '#/money/shopping');
+      logActivity('added', `${name} to the shopping list`, '#/money/shopping');
       return { ok: true };
     });
   }
@@ -388,7 +388,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     if (claim && item.buyerId && item.buyerId !== me()) return { ok: false, error: `${nameOf(item.buyerId)} already claimed this.` };
     return mutate(() => {
       item.buyerId = claim ? me() : null;
-      if (claim) logActivity('claimed', `${item.name} to buy`, '#/money/shopping');
+      if (claim) logActivity('claimed', item.name, '#/money/shopping');
       return { ok: true };
     });
   }
@@ -437,8 +437,8 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       const ev = { id: uid('ev'), title, category: d.category, creatorId: me(), start, end, notes: trimmed(d.notes), createdAt: nowISO() };
       state.events.push(ev);
       track('calendar_event_created', { category: ev.category });
-      logActivity('added to calendar', title, `#/calendar?id=${ev.id}`);
-      notify(memberIds(), { type: 'event', title: `${nameOf(me())} added: ${title}`, body: `${L.CATEGORIES[ev.category].label} · ${L.describeEventTime(ev)}`, link: `#/calendar?id=${ev.id}` });
+      logActivity('added', `${title} to the calendar`, `#/calendar?id=${ev.id}`);
+      notify(memberIds(), { type: 'event', title: `${nameOf(me())} added ${title}.`, body: `${L.CATEGORIES[ev.category].label} · ${L.describeEventTime(ev)}`, link: `#/calendar?id=${ev.id}` });
       return { ok: true, id: ev.id };
     });
   }
@@ -450,8 +450,8 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     if (Object.keys(e).length) return { ok: false, errors: e };
     return mutate(() => {
       Object.assign(ev, { title, category: d.category, start, end, notes: trimmed(d.notes) });
-      logActivity('changed calendar event', title, `#/calendar?id=${ev.id}`);
-      notify(memberIds(), { type: 'event', title: `${nameOf(me())} updated: ${title}`, body: L.describeEventTime(ev), link: `#/calendar?id=${ev.id}` });
+      logActivity('updated', `${title} on the calendar`, `#/calendar?id=${ev.id}`);
+      notify(memberIds(), { type: 'event', title: `${nameOf(me())} updated ${title}.`, body: L.describeEventTime(ev), link: `#/calendar?id=${ev.id}` });
       return { ok: true };
     });
   }
@@ -460,8 +460,8 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     if (!ev || ev.creatorId !== me()) return { ok: false };
     return mutate(() => {
       state.events = state.events.filter((x) => x.id !== id);
-      logActivity('removed calendar event', ev.title, '#/calendar');
-      notify(memberIds(), { type: 'event', title: `${nameOf(me())} removed: ${ev.title}`, body: L.describeEventTime(ev), link: '#/calendar' });
+      logActivity('removed', `${ev.title} from the calendar`, '#/calendar');
+      notify(memberIds(), { type: 'event', title: `${nameOf(me())} removed ${ev.title}.`, body: L.describeEventTime(ev), link: '#/calendar' });
       return { ok: true };
     }, `Deleted event “${ev.title}”`);
   }
@@ -537,7 +537,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       state.occurrences.push(o); return o;
     };
     // Trash: weekly, round-robin, Maya's turn today
-    const trash = chore('Take out trash & recycling', 'weekly', all, 'Bins go to the curb by 8 PM on Tuesdays.');
+    const trash = chore('Take out trash & recycling', 'weekly', all, 'Bins go to the curb the night before pickup.');
     occ(trash, at(0), maya, 0);
     // Kitchen: overdue, Jordan
     const kitchen = chore('Deep-clean kitchen', 'weekly', all, 'Counters, stovetop, sink, and mop.');
@@ -579,20 +579,20 @@ export function createStore({ storage, now = () => new Date() } = {}) {
 
     // Activity (newest first)
     const act = (actorId, verb, subject, link, n, h) => state.activity.push({ id: uid('act'), actorId, verb, subject, link, ref: null, ts: iso(n, h) });
-    act(maya, 'recorded a payback', 'Maya → Jordan $20.00', '#/money/expenses', -1, 18);
-    act(priya, 'added to calendar', 'Quiet study block (midterm review)', '#/calendar', -1, 11);
-    act(priya, 'added expense', 'Cleaning supplies (Target) ($27.43)', '#/money/expenses', -3, 16);
+    act(maya, 'recorded a repayment of', '$20.00 from Maya to Jordan', '#/money/expenses', -1, 18);
+    act(priya, 'added', 'Quiet study block (midterm review) to the calendar', '#/calendar', -1, 11);
+    act(priya, 'added the expense', 'Cleaning supplies (Target) ($27.43)', '#/money/expenses', -3, 16);
     act(priya, 'purchased', 'Sponges & trash bags', '#/money/shopping', -3, 16);
     act(sam, 'completed', 'Vacuum common areas', '#/chores/done', -3, 15);
-    act(jordan, 'added expense', 'Electric bill ($138.37)', '#/money/expenses', -6, 20);
+    act(jordan, 'added the expense', 'Electric bill ($138.37)', '#/money/expenses', -6, 20);
     state.activity.forEach((a) => { if (a.verb === 'completed') a.ref = v1.id; });
     state.activity.sort((a, b) => b.ts.localeCompare(a.ts));
 
     // Notifications for Maya (reminders are generated live)
     const nt = (userId, type, title, body, link, h, read = false) => state.notifications.push({ id: uid('n'), userId, type, title, body, link, key: null, read, createdAt: iso(-1, h) });
-    nt(maya, 'expense', 'Payback recorded: Maya → Jordan', '$20.00 paid outside RoomSync', '#/money/expenses', 18, true);
-    nt(maya, 'event', 'Priya added: Quiet study block (midterm review)', `Quiet / study · ${L.fmtDay(at(1))}`, '#/calendar', 11);
-    nt(maya, 'expense', 'New shared expense: Cleaning supplies (Target)', 'Priya paid $27.43 · your share $6.86', '#/money/expenses', 10, true);
+    nt(maya, 'expense', 'Maya recorded a repayment: Maya paid Jordan $20.00.', 'Paid outside RoomSync.', '#/money/expenses', 18, true);
+    nt(maya, 'event', 'Priya added Quiet study block (midterm review).', `Quiet / study · ${L.fmtDay(at(1))}`, '#/calendar', 11);
+    nt(maya, 'expense', 'Priya added Cleaning supplies (Target).', 'Your share: $6.86 of $27.43', '#/money/expenses', 10, true);
 
     track('demo_started');
     commit();
