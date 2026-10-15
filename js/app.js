@@ -530,10 +530,17 @@ document.addEventListener('submit', (e) => { const f = e.target; if (f.dataset.i
 const NAV = [['home', '#/home', 'Home', 'home', 'Home'], ['chores', '#/chores/mine', 'Chores', 'chores', 'Chores'], ['money', '#/money/expenses', 'Expenses & Shopping', 'money', 'Expenses & Shopping'], ['calendar', '#/calendar', 'Calendar', 'calendar', 'Calendar']];
 const TITLES = { home: 'Home', chores: 'Chores', money: 'Expenses & Shopping', calendar: 'Calendar', notifications: 'Notifications', settings: 'Settings' };
 const ADD_ITEMS = [{ label: 'Chore', icon: 'chores', action: 'add-chore' }, { label: 'Expense', icon: 'money', action: 'add-expense' }, { label: 'Shopping item', icon: 'cart', action: 'add-item' }, { label: 'Event', icon: 'calendar', action: 'add-event' }];
+// Selector that identifies the focused control across re-renders: every data-* attribute, so e.g. the Friday date button
+// is found again instead of the first cal-pick button (Monday).
+function focusSig(el) {
+  const keys = Object.keys(el.dataset).filter((k) => k !== 'menuToggle');
+  if (el.dataset.action || keys.length) return `${el.tagName.toLowerCase()}${keys.map((k) => `[data-${k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}="${CSS.escape(el.dataset[k])}"]`).join('')}`;
+  return el.id ? `#${CSS.escape(el.id)}` : null;
+}
 function render() {
   const route = parseRoute();
   const a = document.activeElement;
-  const sig = a && app.contains(a) ? (a.dataset.action ? `[data-action="${a.dataset.action}"]${a.dataset.id ? `[data-id="${a.dataset.id}"]` : ''}` : a.id ? `#${a.id}` : null) : null;
+  const sig = a && app.contains(a) ? focusSig(a) : null;
   if (!store.state) { app.innerHTML = loadError ? viewLoadError() : viewWelcome(); document.title = 'RoomSync'; return; }
   const [section, sub] = route.parts;
   let page;
@@ -566,7 +573,7 @@ function render() {
     <div class="main-col">${isNarrow ? topbar : ''}
       ${store.saveError ? `<div class="banner-error" role="alert">Couldn’t save to this browser (storage may be full or blocked). Recent changes will be lost if you close or refresh this page.</div>` : ''}
       <main id="main" tabindex="-1" class="${key === 'home' || key === 'calendar' ? 'wide' : ''}">${isNarrow ? status : ''}${page}</main></div>
-    ${isNarrow ? `${menu({ id: 'add-fab', label: 'Add', icon: 'plus', cls: 'fab', wrap: 'fab-wrap', items: ADD_ITEMS })}<nav class="bottomnav" aria-label="Primary">${navLinks(false)}</nav>` : ''}</div>`;
+    ${isNarrow ? `<nav class="bottomnav" aria-label="Primary">${navLinks(false)}${menu({ id: 'add-fab', label: 'Add', icon: 'plus', cls: 'fab', wrap: 'fab-wrap', items: ADD_ITEMS })}</nav>` : ''}</div>`;
   document.title = `${TITLES[key]} · RoomSync`;
   afterRender(route, sig);
 }
