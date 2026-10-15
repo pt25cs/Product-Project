@@ -80,7 +80,7 @@ function choreRow(o, { ctx = 'x', details = false, showOwner = true, check = tru
   if (!mine) items.push({ label: 'Mark done (I did it)', icon: 'check', action: 'complete', data: { id: o.id } }, { label: 'Reassign to me', icon: 'user', action: 'reassign-me', data: { id: o.id } });
   items.push('-', { label: 'Delete chore', icon: 'trash', action: 'delete-chore', data: { id: o.id }, danger: true });
   const next = details && c && c.rotation.length ? `<span>Next: ${esc(who(L.nextAssigneeId(c, o)))}</span>` : '';
-  return `<li class="row" id="occ-${o.id}">${lead}<div class="row-main"><div class="row-title">${esc(o.title)}</div>
+  return `<li class="row" id="occ-${o.id}">${lead}<div class="row-main"><div class="row-title"><button type="button" class="title-btn" data-action="view-chore" data-id="${o.id}">${esc(o.title)}</button></div>
     <div class="row-meta">${dueChip(o)}${showOwner ? `<span>${mine ? 'You' : esc(name(o.assigneeId))}</span>` : ''}${c && c.recurrence === 'weekly' ? `<span>${ic('repeat', 14)}Weekly</span>` : ''}${next}</div>
     ${details && o.notes ? `<div class="row-note">${esc(o.notes)}</div>` : ''}</div>
     <div class="row-side">${menu({ id: `${ctx}-${o.id}`, label: `More actions for ${o.title}`, items })}</div></li>`;
@@ -149,7 +149,7 @@ function viewHome() {
   <div class="dash">
     <div class="dash-col">
       <div data-o="1">${card('mine', 'Your chores', chores, { link: ['#/chores/mine', 'All your chores'] })}</div>
-      ${others.length ? `<div data-o="5">${card('others', 'Needs attention in the household', `<ul class="list">${others.map((o) => `<li class="row" id="occ-${o.id}"><span class="lead-slot">${avatar(o.assigneeId)}</span><div class="row-main"><div class="row-title"><a href="#/chores/all?id=${o.id}">${esc(o.title)}</a></div><div class="row-meta">${dueChip(o)}<span>${esc(name(o.assigneeId))}</span></div></div></li>`).join('')}</ul>`, { link: ['#/chores/all', 'All chores'] })}</div>` : ''}
+      ${others.length ? `<div data-o="5">${card('others', 'Needs attention in the household', `<ul class="list">${others.map((o) => `<li class="row" id="occ-${o.id}"><span class="lead-slot">${avatar(o.assigneeId)}</span><div class="row-main"><div class="row-title"><button type="button" class="title-btn" data-action="view-chore" data-id="${o.id}">${esc(o.title)}</button></div><div class="row-meta">${dueChip(o)}<span>${esc(name(o.assigneeId))}</span></div></div></li>`).join('')}</ul>`, { link: ['#/chores/all', 'All chores'] })}</div>` : ''}
       <div data-o="6">${card('act', 'Recent activity', feed.length ? `<ul class="list feed">${feed.map((a) => `<li><a href="${esc(a.link)}"><strong>${esc(who(a.actorId))}</strong> ${esc(a.verb)} ${esc(a.subject)}</a><time datetime="${a.ts}">${ago(a.ts)}</time></li>`).join('')}</ul>` : empty('No activity yet', 'Completed chores, purchases and changes show up here.'))}</div>
     </div>
     <div class="dash-col">
@@ -421,6 +421,22 @@ function openEventForm(ev) {
     },
   });
 }
+function viewChore(id) {
+  const o = store.state.occurrences.find((x) => x.id === id);
+  if (!o) return;
+  const c = store.sel.chore(o);
+  const mine = o.assigneeId === store.me();
+  const rows = [['Assigned to', mine ? 'You' : esc(name(o.assigneeId))]];
+  rows.push(o.doneAt ? ['Completed', `${esc(who(o.doneBy))} · ${L.fmtStamp(o.doneAt)}`] : ['Due', `${L.fmtDay(o.due)} ${dueChip(o)}`]);
+  if (c && c.recurrence === 'weekly') rows.push(['Repeats', 'Every week']);
+  if (c && c.rotation.length && !o.doneAt) rows.push(['Next in rotation', esc(who(L.nextAssigneeId(c, o)))]);
+  openModal({
+    title: o.title,
+    body: `<dl class="details">${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>${o.notes ? `<div class="details-notes"><h3>Notes</h3><p>${esc(o.notes)}</p></div>` : ''}`,
+    footerExtra: o.doneAt ? '' : `<button type="button" class="btn" data-action="edit-chore-from-details" data-id="${o.id}">Edit</button><button type="button" class="btn primary" data-action="complete-from-details" data-id="${o.id}">Mark complete</button>`,
+  });
+}
+
 function viewEvent(id) {
   const ev = store.state.events.find((x) => x.id === id);
   if (!ev) return;
@@ -444,6 +460,9 @@ const actions = {
   'close-modal': closeModal,
   'add-chore': () => openChoreForm(null),
   'edit-chore': (d) => openChoreForm(byId(store.state.occurrences, d.id)),
+  'view-chore': (d) => viewChore(d.id),
+  'edit-chore-from-details': (d) => { closeModal(); openChoreForm(byId(store.state.occurrences, d.id)); },
+  'complete-from-details': (d) => { closeModal(); actions.complete(d); }, // same completion path, toast and Undo as the checkbox
   complete: (d) => {
     const o = byId(store.state.occurrences, d.id); if (!o) return;
     if (store.completeChore(d.id).ok) toast(`Completed ${o.title}.`, { action: 'Undo', onAction: () => { const r = store.undoComplete(d.id); toast(r.ok ? `${o.title} is open again.` : r.error, { error: !r.ok }); } });
