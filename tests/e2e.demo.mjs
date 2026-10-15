@@ -18,12 +18,14 @@ const shot = (n) => shots && page.screenshot({ path: `${shots}/${n}.png`, fullPa
 const step = (s) => console.log('✓', s);
 const st = (fn, arg) => page.evaluate(fn, arg);
 const nav = (label) => page.getByRole('navigation', { name: 'Primary' }).last().getByRole('link', { name: label });
+const addMenu = async (item) => { await page.getByRole('button', { name: 'Add', exact: true }).click(); await page.getByRole('menuitem', { name: item }).click(); };
 const toastGone = () => page.evaluate(() => document.querySelectorAll('#toasts .toast').forEach((t) => t.remove()));
 
 // 1. demo entry
 await page.goto(BASE);
 await page.getByRole('button', { name: /Try the demo/ }).click();
-await page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Maya$/ }).waitFor();
+await page.getByRole('heading', { name: 'Today', level: 1 }).waitFor();
+await page.getByText(/Good (morning|afternoon|evening), Maya/).waitFor();
 assert.equal(await page.locator('#switch-user').inputValue().then((v) => st((id) => window.__roomsync.nameOf(id), v)), 'Maya');
 await page.getByText('Demo · Saved on this device').waitFor();
 // first useful task visible without scrolling on a phone
@@ -60,8 +62,8 @@ step('2-3. complete → dashboard/history update → undo restores; one next occ
 await nav('Expenses & Shopping').click();
 await page.getByRole('link', { name: 'Shopping', exact: true }).click();
 await page.getByRole('button', { name: 'Claim Dish soap' }).click();
-await page.getByText('You are getting this').first().waitFor();
-await page.getByRole('button', { name: 'Mark Dish soap purchased' }).click();
+await page.getByText('You’re getting this').first().waitFor();
+await page.getByRole('checkbox', { name: 'Purchased: Dish soap' }).click();
 await page.getByLabel('Amount (USD)').fill('10.01');
 await page.getByText('Split 4 ways: Maya $2.51 · Jordan $2.50 · Priya $2.50 · Sam $2.50').waitFor();
 const balBefore = await st(() => window.__roomsync.sel.balances());
@@ -107,7 +109,7 @@ step('6. external repayment recorded, balances updated, copy states no money mov
 
 // 7. calendar: invalid, add, edit
 await nav('Calendar').click();
-await page.getByRole('button', { name: 'Add event' }).first().click();
+await addMenu('Event');
 await page.getByRole('textbox', { name: 'Title' }).fill('Quiet time: orgo prep');
 await page.getByLabel('End time').fill('18:00');
 await page.getByRole('button', { name: 'Add event' }).last().click();
@@ -129,7 +131,7 @@ step('7. event added (validation error near field, values kept), edited, visible
 // 8/9. switch roommate; notifications
 await page.getByLabel('Viewing as').selectOption({ label: 'Jordan' });
 await nav('Home').click();
-await page.getByRole('heading', { name: /, Jordan$/ }).waitFor();
+await page.getByText(/Good (morning|afternoon|evening), Jordan/).waitFor();
 await page.getByText('Deep-clean kitchen').first().waitFor();
 await page.getByRole('link', { name: /^Notifications/ }).click();
 await page.getByText('Maya updated Quiet time: orgo exam.').first().waitFor();
@@ -161,7 +163,7 @@ assert.equal(await st(() => document.activeElement.textContent.trim()), 'Delete 
 await page.keyboard.press('Escape');
 assert.equal(await st(() => document.activeElement.getAttribute('aria-label')), 'More actions for Take out trash & recycling');
 // dialog: Escape closes and focus returns to opener
-await page.getByRole('button', { name: 'Add chore' }).first().focus();
+await page.getByRole('button', { name: 'Add chore', exact: true }).first().focus();
 await page.keyboard.press('Enter');
 await page.getByRole('dialog').waitFor();
 await page.keyboard.press('Escape');
@@ -179,7 +181,8 @@ for (const w of [360, 390, 768, 1280, 1600]) {
     assert.ok(o.sw <= o.iw, `horizontal overflow at ${w}px on #/${r}: ${o.sw} > ${o.iw}`);
   }
   await page.goto(`${BASE}#/money/expenses`);
-  await page.getByRole('button', { name: 'Add expense' }).first().click();
+  await page.getByRole('button', { name: 'Add expense', exact: true }).first().click();
+  await page.waitForTimeout(260); // let the entry animation finish
   const box = await page.locator('#modal').boundingBox();
   assert.ok(box.x >= -1 && box.x + box.width <= w + 1 && box.y >= -1 && box.y + box.height <= 801, `dialog fits viewport at ${w}px`);
   await page.keyboard.press('Escape');

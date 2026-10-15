@@ -238,3 +238,18 @@ test('taking over a claimed shopping item is one atomic step', () => {
   assert.ok(s.takeOverItem(soap.id).ok);
   assert.equal(s.state.shopping.find((i) => i.id === soap.id).buyerId, m);
 });
+
+test('adding a purchased item again creates a fresh needed item without touching the old purchase or its expense', () => {
+  const { s } = fresh(); s.startDemo();
+  const old = s.sel.purchased()[0];
+  const expenses = s.state.expenses.length;
+  assert.ok(old.expenseId);
+  assert.ok(s.addItemAgain(old.id).ok);
+  const again = s.sel.needed().filter((i) => i.name === old.name);
+  assert.equal(again.length, 1);
+  assert.equal(again[0].expenseId, null);
+  assert.equal(s.state.expenses.length, expenses, 'no new expense');
+  assert.equal(s.state.shopping.find((i) => i.id === old.id).status, 'purchased');
+  assert.ok(s.addItemAgain(old.id).duplicate, 'second click does not duplicate');
+  assert.equal(s.sel.needed().filter((i) => i.name === old.name).length, 1);
+});

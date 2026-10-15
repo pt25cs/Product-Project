@@ -21,7 +21,7 @@ async function run(width, height) {
 
   await page.goto(BASE);
   await page.getByRole('button', { name: /Try the demo/ }).click();
-  await page.getByRole('heading', { name: /^Good .*, Maya$/ }).waitFor();
+  await page.getByRole('heading', { name: 'Today', level: 1 }).waitFor();
 
   // extra isolated chores: one without notes, one with very long title + notes
   await st(() => {
@@ -39,7 +39,7 @@ async function run(width, height) {
   assert.equal(await dialog.getByRole('heading', { level: 2 }).innerText(), 'Take out trash & recycling');
   await dialog.getByText('Bins go to the curb the night before pickup.').waitFor();
   assert.match(await dialog.innerText(), /Assigned to\s+You/);
-  assert.match(await dialog.innerText(), /Due today/);
+  assert.match(await dialog.innerText(), /Today/);
   assert.match(await dialog.innerText(), /Repeats\s+Every week/);
   assert.match(await dialog.innerText(), /Next in rotation\s+Jordan/);
   assert.equal(await st(() => document.activeElement.closest('dialog') !== null), true, 'focus moves into the dialog');
@@ -61,6 +61,7 @@ async function run(width, height) {
   // 3. long title/notes wrap and fit
   await page.goto(`${BASE}#/chores/mine`);
   await page.getByRole('button', { name: /^Reorganize the hall closet/ }).click();
+  await page.waitForTimeout(260); // entry animation
   const box = await page.locator('#modal').boundingBox();
   assert.ok(box.x >= -1 && box.x + box.width <= width + 1 && box.y >= -1 && box.y + box.height <= height + 1, 'dialog fits viewport');
   const over = await st(() => { const m = document.querySelector('#modal'); return m.scrollWidth > m.clientWidth + 1 || [...m.querySelectorAll('*')].some((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflowX === 'visible' && e.getBoundingClientRect().right > m.getBoundingClientRect().right + 1); });
@@ -106,7 +107,7 @@ async function run(width, height) {
 
   // 7. persistence
   await page.reload();
-  await page.getByRole('heading', { name: /^Good .*, Maya$/ }).waitFor();
+  await page.getByRole('heading', { name: 'Today', level: 1 }).waitFor();
   assert.ok(await st(() => window.__roomsync.state.chores.some((c) => c.title === 'Wipe stovetop')));
   step(`${width}px: data still loads after refresh`);
   await page.context().close();

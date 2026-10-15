@@ -44,11 +44,15 @@ const F = {
   time: new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }),
   stamp: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
   month: new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }),
+  full: new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
+  wlong: new Intl.DateTimeFormat('en-US', { weekday: 'long' }),
 };
 export const fmtDay = (s) => F.day.format(parseDate(s));
 export const fmtMonthDay = (s) => F.md.format(parseDate(s));
 export const fmtWeekday = (s) => F.wk.format(parseDate(s));
 export const fmtMonth = (s) => F.month.format(parseDate(s));
+export const fmtFull = (s) => F.full.format(parseDate(s));
+export const fmtWeekdayLong = (s) => F.wlong.format(parseDate(s));
 export function fmtTime(hhmm) {
   const [h, m] = hhmm.split(':').map(Number);
   return F.time.format(new Date(2000, 0, 1, h, m));

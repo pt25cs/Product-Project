@@ -32,6 +32,9 @@ const ICONS = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   arrowL: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   arrowR: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  chevR: '<path d="m9 6 6 6-6 6"/>',
+  chevL: '<path d="m15 6-6 6 6 6"/>',
+  repeatSm: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.1M3.5 12h.1M3.5 18h.1"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
 };
@@ -133,10 +136,10 @@ export function confirmDialog({ title, message, confirmLabel = 'Delete', onConfi
 }
 
 // ---------- menus (kebab / add) ----------
-export function menu({ id, label, items, icon = 'more', text = '', cls = 'icon-btn' }) {
+export function menu({ id, label, items, icon = 'more', text = '', cls = 'icon-btn', wrap = '' }) {
   const body = items.map((it) => it === '-' ? '<div class="menu-sep" role="separator"></div>'
     : `<button type="button" role="menuitem" class="menu-item${it.danger ? ' danger' : ''}" data-action="${it.action}" ${Object.entries(it.data || {}).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ')}>${it.icon ? ic(it.icon, 18) : ''}<span>${esc(it.label)}</span></button>`).join('');
-  return `<div class="menu"><button type="button" class="${cls}" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-${id}" data-menu-toggle ${text ? '' : `aria-label="${esc(label)}"`}>${ic(icon, text ? 18 : 20)}${text ? `<span>${esc(text)}</span>` : ''}</button><div class="menu-pop" id="menu-${id}" role="menu" aria-label="${esc(label)}" hidden>${body}</div></div>`;
+  return `<div class="menu ${wrap}"><button type="button" class="${cls}" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-${id}" data-menu-toggle ${text ? '' : `aria-label="${esc(label)}"`}>${ic(icon, text ? 18 : 20)}${text ? `<span>${esc(text)}</span>` : ''}</button><div class="menu-pop" id="menu-${id}" role="menu" aria-label="${esc(label)}" hidden>${body}</div></div>`;
 }
 function closeMenus(except, restore = false) {
   $$('.menu-pop:not([hidden])').forEach((p) => {
@@ -147,6 +150,13 @@ function closeMenus(except, restore = false) {
     if (restore) t.focus();
   });
 }
+// Keep popovers inside the viewport: flip upward near the bottom, align left near the left edge.
+function placeMenu(pop, toggle) {
+  pop.classList.remove('up', 'start');
+  const t = toggle.getBoundingClientRect(), r = pop.getBoundingClientRect();
+  if (t.bottom + r.height + 8 > window.innerHeight && t.top - r.height - 8 > 0) pop.classList.add('up');
+  if (t.right - r.width < 8) pop.classList.add('start');
+}
 export function initMenus() {
   document.addEventListener('click', (e) => {
     const t = e.target.closest('[data-menu-toggle]');
@@ -155,7 +165,7 @@ export function initMenus() {
       const open = pop.hidden;
       closeMenus(pop);
       pop.hidden = !open; t.setAttribute('aria-expanded', String(open));
-      if (open) $('.menu-item', pop)?.focus();
+      if (open) { placeMenu(pop, t); $('.menu-item', pop)?.focus(); }
       return;
     }
     if (e.target.closest('.menu-item')) { closeMenus(); return; }

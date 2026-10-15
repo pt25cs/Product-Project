@@ -14,12 +14,16 @@ Open the page and click **Try demo household** (you start as Maya). Use **Viewin
 Run the checks:
 ```bash
 npm test             # logic tests (money split, rotation, balances, reminders, persistence…) + design-token contrast checks
-# Optional browser walkthrough of the demo scenario (needs Playwright + Chromium, app running):
-PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.demo.mjs
+# Optional browser checks (need Playwright + Chromium, app running on :8080):
+PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.demo.mjs            # demo scenario, keyboard, responsive sweep
+PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.chore-details.mjs   # chore details dialog
+PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.refresh.mjs         # quick add, calendar date strip, Add menu, empty states
 ```
 
 ## Design system
-Neutral canvas (`#F8FAFC`), white surfaces, slate text, one indigo accent (`#4F46E5`), semantic green/amber/red. All colors are semantic CSS tokens at the top of `css/styles.css` (`--color-*`); `tests/contrast.test.mjs` checks the real token pairs against WCAG contrast ratios. Controls, buttons, dialogs, menus, chips and rows share one set of primitives (`js/ui.js` + CSS). Status never relies on color alone (icons, text labels, state on checkboxes).
+List-first and quiet, in the spirit of Todoist: a tinted sidebar with a clear selected row and an **Add** entry, a focused white content column with strong page headings, round-check task rows with thin separators and one line of muted metadata, inline "+ Add" rows, and small contextual menus. The calendar borrows Fantastical's date strip over a time-first agenda; shopping borrows AnyList's quick-add field, check-off rows and "add again". One shared palette throughout: white and `#F8FAFC` surfaces, slate text, indigo `#4F46E5` for interaction, semantic green/amber/red always paired with an icon or text.
+
+All colors are semantic CSS tokens at the top of `css/styles.css` (`--color-*`); `tests/contrast.test.mjs` checks the real token pairs against WCAG contrast ratios. Shared primitives live in `js/ui.js` (icons, dialogs, menus, form fields, toasts). No card chrome around lists; cards are used only for focused groups (the balance panel and forms).
 
 ## Demo walkthrough (verified by `tests/e2e.demo.mjs`)
 1. Click **Try the demo** → dashboard as Maya.

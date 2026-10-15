@@ -392,6 +392,17 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       return { ok: true };
     });
   }
+  /** Put a previously purchased item back on the list as a fresh "needed" item (the old purchase and its expense stay untouched). */
+  function addItemAgain(id) {
+    const old = state.shopping.find((s) => s.id === id);
+    if (!old || old.status !== 'purchased') return { ok: false };
+    if (state.shopping.some((s) => s.status === 'needed' && s.name.toLowerCase() === old.name.toLowerCase())) return { ok: true, duplicate: true };
+    return mutate(() => {
+      state.shopping.push({ id: uid('s'), name: old.name, qty: old.qty, notes: old.notes, buyerId: null, status: 'needed', purchasedBy: null, purchasedAt: null, expenseId: null, createdBy: me(), createdAt: nowISO() });
+      logActivity('added', `${old.name} to the shopping list`, '#/money/shopping');
+      return { ok: true };
+    });
+  }
   function takeOverItem(id) {
     const item = state.shopping.find((s) => s.id === id);
     if (!item || item.status !== 'needed' || item.buyerId === me()) return { ok: false };
@@ -611,7 +622,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     createHousehold, startDemo, setCurrentUser,
     addChore, editChore, reassignChore, completeChore, undoComplete, deleteChore,
     addExpense, editExpense, deleteExpense, addReimbursement, deleteReimbursement,
-    addItem, editItem, deleteItem, claimItem, takeOverItem, purchaseItem, reopenItem,
+    addItem, editItem, deleteItem, claimItem, takeOverItem, addItemAgain, purchaseItem, reopenItem,
     addEvent, editEvent, deleteEvent,
     setRead, markAllRead, setPrefs, undoLast, runReminders: () => { if (generateReminders()) { save(); emit(); } },
     exportAnalytics: () => JSON.stringify({ household: state.household.id, mode: state.mode, exportedAt: nowISO(), events: state.analytics, completions: state.occurrences.filter((o) => o.doneAt).map((o) => ({ title: o.title, due: o.due, doneAt: o.doneAt, doneBy: o.doneBy, assigneeId: o.assigneeId })) }, null, 2),
