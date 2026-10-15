@@ -115,7 +115,8 @@ function shopRowCompact(i) {
 
 // ---------- Home ----------
 const PREVIEW = 3; // practical preview length for the available layout (not a research-derived number)
-const moreLink = (n, shown, href, label) => (n > shown ? `<a class="more-link" href="${href}">${label} (${n})</a>` : '');
+const moreLink = (n, shown, href, label) => (n > shown ? `<a class="more-link" href="${href}">${label}</a>` : '');
+const moreText = (n, shown, what) => (n > shown ? `<p class="small muted" style="padding-top:8px">+ ${n - shown} more ${what}</p>` : '');
 function viewHome() {
   const s = store.state, t = today(), me = store.me();
   const hr = new Date().getHours();
@@ -131,13 +132,13 @@ function viewHome() {
   const todayBody = dueToday.length ? list(dueToday)
     : `<div class="empty"><strong>${ic('check', 16)} You’re all caught up today</strong>${upcomingAll.length ? `Next up: ${esc(upcomingAll[0].title)}, ${L.fmtDay(upcomingAll[0].due)}.` : 'Nothing is assigned to you right now.'}</div>`;
   const mainCol = `<div data-o="1">${overdueMine.length ? sec('over', 'Overdue', list(overdueMine), { count: overdueMine.length, danger: true, icon: 'alert' }) : ''}
-      ${sec('today', 'Today', todayBody + addRow('add-chore', 'Add chore'), { count: dueToday.length || null })}
+      ${sec('today', 'Your chores', todayBody + addRow('add-chore', 'Add chore'), { count: dueToday.length || null })}
       ${upcomingAll.length ? sec('up', 'Your upcoming chores', list(upcoming) + moreLink(upcomingAll.length, upcoming.length, '#/chores/mine', 'See all your chores'), { count: upcomingAll.length }) : ''}</div>
     ${others.length ? `<div data-o="2">${sec('others', 'Past due in the household', `<ul class="list">${others.slice(0, PREVIEW).map((o) => choreRow(o, { ctx: 'o', owner: true })).join('')}</ul>${moreLink(others.length, PREVIEW, '#/chores/all', 'See all chores')}`, { count: others.length })}</div>` : ''}
     <div data-o="6">${disclosure('activity', 'Recent activity', feed.length ? `<ul class="feed">${feed.map((a) => `<li><a href="${esc(a.link)}"><strong>${esc(who(a.actorId))}</strong> ${esc(L.displayCopy(a.verb))} ${esc(L.displayCopy(a.subject))}</a><time datetime="${a.ts}">${ago(a.ts)}</time></li>`).join('')}</ul>` : empty('No activity yet', 'Completed chores, purchases and changes show up here.'))}</div>`;
   const sideCol = `<div data-o="3" class="sec"><div class="panel-soft"><div class="sec-head" style="border:0;padding:0 0 8px"><h2>Your balance</h2><a href="#/money/expenses">Expenses</a></div>${balanceBlock()}</div></div>
-    <div data-o="4">${sec('ev', 'Household plans', events.length ? `<ul class="list">${events.slice(0, PREVIEW).map(eventRow).join('')}</ul>${moreLink(events.length, PREVIEW, '#/calendar', 'See calendar')}` : empty('Nothing planned', 'Add quiet time, guests or plans so everyone knows.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>'), { count: events.length || null, right: '<a href="#/calendar">Calendar</a>' })}</div>
-    <div data-o="5">${sec('shop', 'Shopping list', needed.length ? `<ul class="list">${needed.slice(0, PREVIEW).map(shopRowCompact).join('')}</ul>${moreLink(needed.length, PREVIEW, '#/money/shopping', 'See the full list')}` : empty('Nothing needed', 'Add something when the apartment runs low.', '<br><button type="button" class="btn sm" data-action="add-item">Add item</button>'), { count: needed.length || null, right: '<a href="#/money/shopping">Open list</a>' })}</div>`;
+    <div data-o="4">${sec('ev', 'Household plans', events.length ? `<ul class="list">${events.slice(0, PREVIEW).map(eventRow).join('')}</ul>${moreText(events.length, PREVIEW, 'in the next 14 days')}` : empty('Nothing planned', 'Add quiet time, guests or plans so everyone knows.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>'), { count: events.length || null, right: '<a href="#/calendar">Calendar</a>' })}</div>
+    <div data-o="5">${sec('shop', 'Shopping list', needed.length ? `<ul class="list">${needed.slice(0, PREVIEW).map(shopRowCompact).join('')}</ul>${moreText(needed.length, PREVIEW, 'needed')}` : empty('Nothing needed', 'Add something when the apartment runs low.', '<br><button type="button" class="btn sm" data-action="add-item">Add item</button>'), { count: needed.length || null, right: '<a href="#/money/shopping">Open list</a>' })}</div>`;
   return `<div class="page-head"><div><h1>Today</h1><p class="sub">${greet}, ${esc(name(me))} · ${L.fmtDay(t)}</p></div></div><div class="dash"><div class="dash-col">${mainCol}</div><div class="dash-col">${sideCol}</div></div>`;
 }
 
@@ -191,9 +192,10 @@ function viewMoney(tab) {
   const expRow = (e) => {
     const share = e.splits[me];
     const lines = e.participantIds.map((id) => `<li>${esc(name(id))}: ${money(e.splits[id])}${id === e.payerId ? ' (paid)' : ''}</li>`).join('');
+    const extra = `<li>Split ${e.participantIds.length} ${e.participantIds.length === 1 ? 'way' : 'ways'} equally</li>${e.shoppingItemId ? '<li>Recorded from a shopping list purchase</li>' : ''}`;
     return `<li class="row" id="exp-${e.id}"><div class="row-lead">${avatar(e.payerId)}</div><div class="row-main"><div class="row-title">${esc(e.description)}</div>
-      <div class="row-meta"><span>${esc(who(e.payerId))} paid</span><span>${L.fmtDay(e.date)}</span><span>Split ${e.participantIds.length} ${e.participantIds.length === 1 ? 'way' : 'ways'}</span>${e.shoppingItemId ? `<span>${ic('cart', 13)}From shopping list</span>` : ''}</div>
-      <details class="inline"><summary>Split details</summary><ul>${lines}</ul></details></div>
+      <div class="row-meta"><span>${esc(who(e.payerId))} paid · ${L.fmtDay(e.date)}</span></div>
+      <details class="inline" data-key="exp-${e.id}"${ui.open[`exp-${e.id}`] ? ' open' : ''}><summary>Details</summary><ul>${extra}${lines}</ul></details></div>
       <div class="row-side"><div class="amount">${money(e.amountCents)}<small>${share !== undefined ? `Your share ${money(share)}` : 'Not in split'}</small></div>${menu({ id: `e-${e.id}`, label: `More actions for ${e.description}`, items: [{ label: 'Edit expense', icon: 'edit', action: 'edit-expense', data: { id: e.id } }, '-', { label: 'Delete expense', icon: 'trash', action: 'delete-expense', data: { id: e.id }, danger: true }] })}</div></li>`;
   };
   const reRow = (r) => `<li class="row"><div class="row-lead">${ic('repeatSm', 18)}</div><div class="row-main"><div class="row-title">${esc(who(r.fromId))} repaid ${esc(name(r.toId))}</div><div class="row-meta"><span>${L.fmtDay(r.date)}</span><span>Paid outside RoomSync</span>${r.note ? `<span>${esc(r.note)}</span>` : ''}</div></div>
@@ -241,7 +243,7 @@ function viewCalendar() {
       ${evs.map((e) => `<button type="button" class="ag-row" data-action="view-event" data-id="${e.id}"><span class="ag-time">${rangeLabel(e, d)}</span><span class="ag-ic cat-${e.category}">${ic(CAT_ICON[e.category], 15)}</span><span><span class="ag-title">${esc(e.title)}</span><span class="ag-sub" style="display:block">${esc(L.CATEGORIES[e.category].label)} · ${esc(who(e.creatorId))}</span></span></button>`).join('')}
       ${occs.map((o) => `<button type="button" class="ag-row" data-action="view-chore" data-id="${o.id}"><span class="ag-time">Chore</span><span class="ag-ic chore">${ic('chores', 15)}</span><span><span class="ag-title${o.doneAt ? ' done' : ''}">${esc(o.title)}</span><span class="ag-sub" style="display:block">${esc(who(o.assigneeId))}${o.doneAt ? ' · Done' : ''}</span></span></button>`).join('')}
       ${!evs.length && !occs.length ? '<p class="small muted" style="padding:12px 0">Nothing planned</p>' : ''}</section>`).join('');
-    const anchor = `<p class="ag-anchor">Showing the next 14 days from <strong>${L.fmtFull(sel)}</strong>${sel === t ? ' (today)' : ''}. Pick another day above to start the agenda there.${sel !== t ? ' <button type="button" class="btn quiet sm" data-action="cal-today">Back to today</button>' : ''}</p>`;
+    const anchor = `<div class="ag-anchor"><span>Next 14 days · From <strong>${L.fmtMonthDay(sel)}</strong>${sel === t ? ' (today)' : ''}</span>${sel !== t ? '<button type="button" class="btn quiet sm" data-action="cal-today">Back to today</button>' : ''}<details class="inline" data-key="aghelp"${ui.open.aghelp ? ' open' : ''}><summary>How this works</summary><p>The agenda starts on the day you pick in the strip above and lists the next 14 days. Days with nothing planned are skipped.</p></details></div>`;
     body = `${strip}${anchor}${any ? rows : rows + empty('Nothing on the calendar', 'Add quiet time, guests, an away day or a household plan.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>')}`;
   } else {
     body = `<div class="week">${days.map((d) => {

@@ -41,8 +41,9 @@ const noOverflow = async (page, label) => { const o = await page.evaluate(() => 
   await page.getByRole('heading', { level: 2, name: /^Past due in the household/ }).waitFor();
   assert.equal(await page.getByRole('heading', { level: 2, name: /^(Upcoming|Coming up)/ }).count(), 0, 'ambiguous headings removed');
   assert.ok((await page.locator('#h-up').locator('xpath=ancestor::section//li.row').count()) <= 3, 'upcoming preview limited');
-  await page.getByRole('link', { name: /See all your chores \(\d+\)/ }).waitFor();
-  await page.getByRole('link', { name: /See the full list \(\d+\)/ }).waitFor();
+  await page.getByRole('link', { name: 'See all your chores' }).waitFor();
+  await page.getByText(/\+ \d+ more needed/).waitFor();
+  assert.equal(await page.getByRole('link', { name: /See calendar|See the full list/ }).count(), 0, 'one link per preview');
   assert.equal(await page.locator('details[data-key=activity]').evaluate((d) => d.open), false, 'activity collapsed by default');
   const y = async (sel) => (await page.locator(sel).first().boundingBox()).y;
   const order = [await y('#h-today'), await y('#h-others'), await y('text=Your balance'), await y('#h-ev'), await y('#h-shop'), await y('details[data-key=activity] > summary')];
@@ -96,9 +97,11 @@ const noOverflow = async (page, label) => { const o = await page.evaluate(() => 
   const evCount = () => st(() => window.__roomsync.state.events.length);
   const e0 = await evCount();
   const tomorrow = await st(() => { const d = new Date(window.__roomsync.today() + 'T00:00'); d.setDate(d.getDate() + 1); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; });
-  await page.getByText(/Showing the next 14 days from/).waitFor();
+  await page.getByText(/Next 14 days · From/).waitFor();
   await page.locator(`.ds-day[data-date="${tomorrow}"]`).click();
-  await page.getByText(/Pick another day above to start the agenda there/).waitFor();
+  await page.getByText(new RegExp(`Next 14 days · From ${new Date(tomorrow + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`)).waitFor();
+  await page.getByText('How this works').click();
+  await page.getByText(/starts on the day you pick/).waitFor();
   await page.getByRole('button', { name: 'Back to today' }).waitFor();
   await page.getByRole('button', { name: 'Add event', exact: true }).click();
   assert.equal(await page.getByLabel('Starts').inputValue(), tomorrow, 'toolbar Add event defaults to the selected day');
@@ -178,6 +181,67 @@ const noOverflow = async (page, label) => { const o = await page.evaluate(() => 
   await shot('home-desktop');
   await page.context().close();
 }
+
+// ---------- final polish: Home heading/spacing, expense rows, long content at 360px ----------
+for (const w of [390, 360]) {
+  const page = await open(w, 800);
+  const shot = (n) => shots && page.screenshot({ path: `${shots}/${n}.png` });
+  assert.equal(await page.getByRole('heading', { level: 1, name: 'Today' }).count(), 1);
+  assert.equal(await page.getByRole('heading', { level: 2, name: /^Today/ }).count(), 0, 'no repeated Today heading');
+  await page.getByRole('heading', { level: 2, name: /^Your chores/ }).waitFor();
+  const first = await page.getByRole('checkbox', { name: /^Complete:/ }).first().boundingBox();
+  console.log(`  first chore top at ${Math.round(first.y)}px (${w}px wide)`);
+  assert.ok(first.y < 235, `first chore should start higher (was ~260): ${first.y}`);
+  await shot(`home-mobile-${w}`);
+  // overdue + empty states keep honest headings
+  await page.evaluate(() => { const s = window.__roomsync; s.state.occurrences.filter((o) => !o.doneAt && o.assigneeId === s.me()).forEach((o) => s.deleteChore(o.id)); });
+  await page.reload(); await page.getByRole('heading', { level: 1, name: 'Today' }).waitFor();
+  await page.getByText('You’re all caught up today').waitFor();
+  assert.equal(await page.getByRole('heading', { level: 2, name: /^Overdue/ }).count(), 0);
+  await page.evaluate(() => { const s = window.__roomsync, me = s.me(); const d = new Date(s.today() + 'T00:00'); d.setDate(d.getDate() - 3); s.addChore({ title: 'Late chore', notes: '', assigneeId: me, due: d.toISOString().slice(0, 10), recurrence: 'once', rotate: false, rotation: [] }); });
+  await page.getByRole('heading', { level: 2, name: /^Overdue/ }).waitFor();
+  assert.equal(await page.locator('#h-today').locator('xpath=ancestor::section//li.row').count(), 0, 'overdue chore is not listed under Your chores');
+
+  // expenses: long title + large amount, details disclosure, no overflow
+  await page.evaluate(() => { const s = window.__roomsync, ids = s.memberIds(); s.addExpense({ description: 'Annual renter’s insurance premium for the whole apartment and storage unit', amount: '12345.67', date: '2025-12-30', payerId: ids[1], participantIds: ids, token: 'long1' }); });
+  await page.goto(`${BASE}#/money/expenses`);
+  const row = page.locator('li.row', { hasText: 'Annual renter’s insurance' });
+  await row.waitFor();
+  assert.match(await row.innerText(), /\$12,345\.67/);
+  assert.match(await row.innerText(), /Your share \$3,086\.42/);
+  assert.equal(await row.locator('.row-meta span').count(), 1, 'payer and date share one compact line');
+  assert.match(await row.locator('.row-meta').innerText(), /Jordan paid · Tue, Dec 30/);
+  await noOverflow(page, `expenses ${w}`);
+  const amt = await row.locator('.amount').boundingBox();
+  assert.ok(amt.x + amt.width <= w, 'amount not clipped');
+  const seeded = page.locator('li.row', { hasText: 'Cleaning supplies' });
+  assert.equal(await seeded.locator('details.inline').evaluate((d) => d.open), false);
+  assert.equal(await seeded.getByText('Recorded from a shopping list purchase').isVisible(), false);
+  await seeded.getByText('Details', { exact: true }).click();
+  await seeded.getByText('Recorded from a shopping list purchase').waitFor();
+  await seeded.getByText(/Split 4 ways equally/).waitFor();
+  assert.match(await seeded.innerText(), /Your share \$6\.86/, 'share stays visible');
+  assert.match(await page.locator('li.row', { hasText: 'You repaid Jordan' }).innerText(), /Paid outside RoomSync/);
+  await shot(`expenses-mobile-${w}`);
+
+  // calendar: date outside the current week updates the compact anchor
+  await page.goto(`${BASE}#/calendar`);
+  await page.getByRole('radio', { name: 'Agenda' }).check({ force: true });
+  await page.getByRole('button', { name: 'Next week' }).click();
+  await page.getByRole('button', { name: 'Next week' }).click();
+  const anchor = page.locator('.ag-anchor');
+  const txt = await anchor.innerText();
+  assert.match(txt, /Next 14 days · From [A-Z][a-z]{2} \d+/);
+  assert.ok(!/\(today\)/.test(txt));
+  await page.getByRole('button', { name: 'Back to today' }).click();
+  assert.match(await anchor.innerText(), /\(today\)/);
+  const ab = await anchor.boundingBox();
+  assert.ok(ab.height < 90, `anchor stays compact (${ab.height}px)`);
+  await noOverflow(page, `calendar ${w}`);
+  await shot(`agenda-mobile-${w}`);
+  await page.context().close();
+}
+console.log('✓ final polish: single Today heading, higher first chore, honest overdue/empty states, compact expense rows, compact agenda anchor');
 assert.deepEqual(errors, [], errors.join('; '));
 console.log('REFINEMENT CHECKS PASSED');
 await browser.close();
