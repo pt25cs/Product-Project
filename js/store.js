@@ -625,6 +625,8 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     addItem, editItem, deleteItem, claimItem, takeOverItem, addItemAgain, purchaseItem, reopenItem,
     addEvent, editEvent, deleteEvent,
     setRead, markAllRead, setPrefs, undoLast, runReminders: () => { if (generateReminders()) { save(); emit(); } },
+    // Log a usage event (e.g. tutorial progress) into the same on-device analytics the Settings export reads. No network, no profiles.
+    trackEvent: (name, props = {}) => { if (!state) return; track(name, props); save(); },
     exportAnalytics: () => JSON.stringify({ household: state.household.id, mode: state.mode, exportedAt: nowISO(), events: state.analytics, completions: state.occurrences.filter((o) => o.doneAt).map((o) => ({ title: o.title, due: o.due, doneAt: o.doneAt, doneBy: o.doneBy, assigneeId: o.assigneeId })) }, null, 2),
   };
 }

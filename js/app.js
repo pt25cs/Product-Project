@@ -1,6 +1,7 @@
 import * as L from './logic.js';
 import { createStore, STARTER_CHORES } from './store.js';
 import { $, $$, esc, plural, ic, toast, field, input, select, segmented, checkGroup, openModal, closeModal, initModal, confirmDialog, showErrors, formData, menu, initMenus } from './ui.js';
+import { startTour, endTour, tourSeen, resetTourSeen } from './tour.js';
 
 // ---------- boot ----------
 let storage;
@@ -10,6 +11,18 @@ try { storage = window.localStorage; storage.getItem('roomsync.probe'); } catch 
 }
 const store = createStore({ storage });
 const app = $('#app');
+
+// Launch the guided tour. `force` re-runs it even if it was seen before (used by Settings → Replay).
+function launchTour(force = false) {
+  if (!store.state) return;
+  if (!force && tourSeen(storage)) return;
+  startTour({
+    storage,
+    navigate: (hash) => { if (location.hash !== hash) { location.hash = hash; } ui.handled = null; render(); },
+    track: (name, props) => store.trackEvent(name, props),
+    onEnd: () => render(), // refresh so the Settings "events recorded" count stays current
+  });
+}
 const ui = { statsWeek: null, calSel: null, calView: null, open: {}, welcome: null, handled: null, focusAfter: null };
 let loadError = null;
 const narrowMQ = window.matchMedia('(max-width: 859px)');
@@ -280,7 +293,8 @@ function viewSettings() {
     <div class="field" style="max-width:320px;margin-top:8px"><label for="f-leadDays">Remind me</label>${select('leadDays', [[0, 'On the day it’s due'], [1, '1 day before'], [2, '2 days before']], p.leadDays, 'data-change="pref"')}</div>
     ${toggleRow('updates', 'Tell me about assignments, shared expenses and calendar changes', p.updates)}</form><p class="hint">Reminders appear in RoomSync’s notification list while the app is open. Background push, email and text messages aren’t part of this version.</p>`)}
   ${disclosure('proto', 'About this prototype', `<ul class="small" style="margin:0;padding-left:18px"><li>Data is saved in this browser on this device. It doesn’t sync to other devices.</li><li>There are no accounts or invite codes. “Viewing as” switches between the roommates stored here.</li><li>Notifications are in-app only.</li><li>Repayments update RoomSync’s records. RoomSync never moves money.</li></ul>`)}
-  ${sec('res', 'Research tools', `<p class="small" style="padding-top:12px">RoomSync logs basic usage events on this device only (household created, chores assigned and completed, expenses, purchases, calendar events). Nothing is uploaded. ${plural(s.analytics.length, 'event')} recorded.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="export">Download events (JSON)</button></p>`)}
+  ${sec('guide', 'Getting started', `<p class="small" style="padding-top:12px">New here, or showing someone else around? Replay the guided tour that walks through each tab and the most common tasks.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="replay-tour">${ic('info', 16)}Replay tutorial</button></p>`)}
+  ${sec('res', 'Research tools', `<p class="small" style="padding-top:12px">RoomSync logs basic usage events on this device only (household created, chores assigned and completed, expenses, purchases, calendar events, tutorial progress). Nothing is uploaded. ${plural(s.analytics.length, 'event')} recorded.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="export">Download events (JSON)</button></p>`)}
   ${sec('danger', 'Danger zone', `<p class="small" style="padding-top:12px">${s.mode === 'demo' ? 'Resets the demo and returns to the welcome screen.' : 'Permanently deletes this household’s data from this browser.'}</p><p style="margin-top:12px"><button type="button" class="btn danger-outline" data-action="reset">${s.mode === 'demo' ? 'Reset demo' : 'Delete all data'}</button></p>`, { danger: true })}`;
 }
 
@@ -309,6 +323,7 @@ function handleInlineForm(form) {
     if (!res.ok) return showErrors(form, res.errors);
     ui.welcome = null; location.hash = '#/home';
     toast(`Welcome to ${store.state.household.name}.`);
+    if (!tourSeen(storage)) setTimeout(() => launchTour(), 350);
   } else if (kind === 'add-item') {
     const d = formData(form), err = $('#qa-err', form);
     if (!String(d.name || '').trim()) { err.textContent = 'Type an item name to add it.'; err.hidden = false; $('#qa-name', form).setAttribute('aria-invalid', 'true'); $('#qa-name', form).focus(); return; }
@@ -453,7 +468,7 @@ function viewEvent(id) {
 // ---------- actions ----------
 const byId = (list, id) => list.find((x) => x.id === id);
 const actions = {
-  'start-demo': () => { store.startDemo(); ui.welcome = null; location.hash = '#/home'; toast('Demo ready. You’re viewing as Maya.'); },
+  'start-demo': () => { store.startDemo(); ui.welcome = null; location.hash = '#/home'; toast('Demo ready. You’re viewing as Maya.'); if (!tourSeen(storage)) setTimeout(() => launchTour(), 350); },
   'show-create': () => { ui.welcome = 'create'; render(); $('#f-userName')?.focus(); },
   'hide-create': () => { ui.welcome = null; render(); },
   'add-roommate': (d, el) => { const box = $('#others'); const n = box.children.length + 1; if (n > 4) return; box.insertAdjacentHTML('beforeend', roommateRow(n)); $$('input', box).at(-1).focus(); if (n >= 4) el.disabled = true; },
@@ -502,7 +517,8 @@ const actions = {
     const blob = new Blob([store.exportAnalytics()], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'roomsync-test-events.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   },
-  reset: () => confirmDialog({ title: store.state.mode === 'demo' ? 'Reset the demo?' : 'Delete all data?', message: 'This permanently removes this household’s data from this browser.', confirmLabel: 'Delete everything', onConfirm: () => { store.reset(); ui.welcome = null; location.hash = '#/home'; } }),
+  'replay-tour': () => launchTour(true),
+  reset: () => confirmDialog({ title: store.state.mode === 'demo' ? 'Reset the demo?' : 'Delete all data?', message: 'This permanently removes this household’s data from this browser.', confirmLabel: 'Delete everything', onConfirm: () => { resetTourSeen(storage); store.reset(); ui.welcome = null; location.hash = '#/home'; } }),
   'retry-load': () => { store.reset(); render(); },
 };
 document.addEventListener('click', (e) => {
