@@ -151,6 +151,53 @@ export function nextDue(due, today) {
   return n;
 }
 
+// ---------- Scheduled auto-rotation (Requirement 1; pure, date-driven) ----------
+/**
+ * Number of whole cycles between a chore's anchor date and a target date, where each cycle
+ * is `cycleDays` long (default 7 = weekly). Negative when `targetDate` precedes the anchor.
+ * Deterministic and DOM-free (Requirement 1.1, 1.7).
+ */
+export function cyclesSince(anchorDate, targetDate, cycleDays = 7) {
+  const n = Number(cycleDays);
+  if (!Number.isFinite(n) || n < 1) return 0;
+  return Math.floor(diffDays(anchorDate, targetDate) / Math.trunc(n));
+}
+
+/**
+ * Whose turn it is for the cycle that contains `targetDate`, given the chore's rotation order,
+ * anchor date, and configured cadence. Pure round-robin:
+ *   rotation[(startIdx + cyclesSince(anchor, target, cycleDays)) % rotation.length]
+ * `startIdx` defaults to 0 so the anchor cycle assigns the first roommate in the rotation.
+ * Returns null when the chore has no usable rotation. (Requirement 1.1, 1a.)
+ */
+export function rotationAssignee(chore, targetDate) {
+  const r = chore && chore.rotation;
+  if (!Array.isArray(r) || r.length === 0) return null;
+  if (!chore.anchorDate || !isValidDate(chore.anchorDate)) return r[0];
+  const cycleDays = chore.cycleDays ?? 7;
+  const start = Number.isInteger(chore.startIdx) ? chore.startIdx : 0;
+  const cycles = cyclesSince(chore.anchorDate, targetDate, cycleDays);
+  const len = r.length;
+  // Modulo that stays non-negative even when `targetDate` precedes the anchor.
+  const idx = (((start + cycles) % len) + len) % len;
+  return r[idx];
+}
+
+/**
+ * Due date of the current cycle: the first cycle boundary on or after `today`, counted from the
+ * chore's anchor in `cycleDays` steps. Reuses the no-backlog rule (never returns a past date),
+ * mirroring `nextDue`. Falls back to `today` when the chore lacks a valid anchor. (Requirement 1.3.)
+ */
+export function currentCycleDue(chore, today) {
+  if (!chore || !chore.anchorDate || !isValidDate(chore.anchorDate)) return today;
+  const cycleDays = Math.trunc(Number(chore.cycleDays ?? 7));
+  const step = Number.isFinite(cycleDays) && cycleDays >= 1 ? cycleDays : 7;
+  const cycles = cyclesSince(chore.anchorDate, today, step);
+  let due = addDays(chore.anchorDate, Math.max(0, cycles) * step);
+  while (due < today) due = addDays(due, step);
+  return due;
+}
+
 // ---------- Calendar ----------
 export const CATEGORIES = {
   away: { label: 'Away', hint: 'Away or unavailable' },

@@ -1,25 +1,9 @@
-// Guided, click-through product tour. Dependency-free; no accounts, no backend.
-// Walks a first-time user to each tab and points at the real controls for the most
-// common tasks (find shopping/expenses, add items, record a purchase + price, set event times).
-// "Seen" state is a single localStorage flag — not tied to any user profile.
+// Per-tab onboarding coachmarks. Dependency-free; no accounts, no backend.
+// Each tab (home/chores/money/calendar/profile) gets one short, single-step coachmark the
+// first time it's opened, reusing the low-level ring/card chrome + positioning primitives.
+// "Seen" state is a small per-tab map in localStorage — not tied to any user profile.
 
-const SEEN_KEY = 'roomsync.tour.v1';
-
-// ---------- seen flag ----------
-export function tourSeen(storage) {
-  try { return storage.getItem(SEEN_KEY) === 'done'; } catch { return false; }
-}
-function markSeen(storage) {
-  try { storage.setItem(SEEN_KEY, 'done'); } catch { /* storage blocked: tour just won't persist */ }
-}
-export function resetTourSeen(storage) {
-  try { storage.removeItem(SEEN_KEY); } catch { /* ignore */ }
-}
-
-// ---------- step definitions ----------
-// Each step: a short lesson anchored to a real element. `route` navigates first (via location.hash),
-// `find` returns the element to spotlight (tried after the route renders, with retries).
-// Narrow (mobile) and wide (desktop) layouts expose different nav elements, so anchors use fallbacks.
+// ---------- anchor helpers (shared by COACHMARKS) ----------
 const q = (sel) => () => document.querySelector(sel);
 // First matching selector that is actually visible (handles sidebar vs bottom-nav swap).
 const firstVisible = (...sels) => () => {
@@ -31,165 +15,145 @@ const firstVisible = (...sels) => () => {
   return null;
 };
 
-const STEPS = [
-  {
-    id: 'welcome',
-    route: '#/home',
-    find: firstVisible('.household'),
-    title: 'Welcome to RoomSync',
-    body: 'Quick tour: 60 seconds to see where everything lives and how to add things. You can skip anytime, and replay it later from Settings.',
-    place: 'center',
-  },
-  {
-    id: 'home',
-    route: '#/home',
+// ---------- per-tab coachmark seen-state (Requirement 6) ----------
+// Onboarding is per-tab: each tab (home/chores/money/calendar/profile) has its own "seen" flag,
+// stored as a small map under one key so tabs are independent (6.3) and resettable together (6.4).
+// Every accessor is wrapped in try/catch so a blocked/throwing storage fails quietly (6.6).
+const COACH_KEY = 'roomsync.coach.v1'; // { home:true, chores:true, money:true, calendar:true, profile:true }
+
+function readCoachMap(storage) {
+  try {
+    const raw = storage.getItem(COACH_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch { return {}; }
+}
+
+export function coachSeen(storage, tab) {
+  try { return readCoachMap(storage)[tab] === true; } catch { return false; }
+}
+
+export function markCoachSeen(storage, tab) {
+  try {
+    const map = readCoachMap(storage);
+    map[tab] = true;
+    storage.setItem(COACH_KEY, JSON.stringify(map));
+  } catch { /* storage blocked: coachmark just won't persist */ }
+}
+
+export function resetCoachmarks(storage) {
+  try { storage.removeItem(COACH_KEY); } catch { /* ignore */ }
+}
+
+// ---------- per-tab coachmark content ----------
+// One short lesson per tab, anchored to a reliably-present element. `money` anchors to `.tabs`
+// (always present on that route); if an anchor is missing the engine's center fallback handles it (6.5).
+const COACHMARKS = {
+  home: {
     find: firstVisible('.dash', 'main'),
     title: 'Home shows what matters now',
-    body: 'Your due chores, balance, upcoming plans and the shopping list preview are all here. The tabs below (or the sidebar on a computer) take you to the full sections.',
-    place: 'auto',
+    body: 'Your due chores, balance, upcoming plans and the shopping preview live here. The tabs below (or the sidebar on a computer) open the full sections.',
   },
-  {
-    id: 'nav-chores',
-    route: '#/home',
-    find: firstVisible('.sidebar .nav[href="#/chores/mine"]', '.bottomnav a[href="#/chores/mine"]'),
-    title: 'Chores tab',
-    body: 'Tap here to see chores. This is where you check off what you did, see who’s next in the rotation, and add new chores.',
-    place: 'auto',
-    advanceHint: 'chores',
+  chores: {
+    find: firstVisible('.add-row[data-action="add-chore"]', '[data-action="add-chore"]', 'main'),
+    title: 'Chores and whose turn it is',
+    body: 'Check off what you did and see who’s next. “Add chore” sets who’s responsible, a due date, and weekly rotation — turn on “Advance automatically” so turns rotate on schedule. Need a hand? Use a chore’s menu to ask someone to take it or offer a trade.',
   },
-  {
-    id: 'chores-add',
-    route: '#/chores/mine',
-    find: firstVisible('.add-row[data-action="add-chore"]', '[data-action="add-chore"]'),
-    title: 'Add a chore',
-    body: 'Use “Add chore” to create a task, pick who’s responsible, set a due date, and choose whether it repeats weekly and rotates between roommates.',
-    place: 'auto',
-  },
-  {
-    id: 'nav-money',
-    route: '#/chores/mine',
-    find: firstVisible('.sidebar .nav[href="#/money/expenses"]', '.bottomnav a[href="#/money/expenses"]'),
-    title: 'Expenses & Shopping live together',
-    body: 'This tab holds BOTH shared expenses and the shopping list. A lot of people miss that — they share one place with two tabs at the top.',
-    place: 'auto',
-    advanceHint: 'money',
-  },
-  {
-    id: 'money-tabs',
-    route: '#/money/expenses',
+  money: {
     find: firstVisible('.tabs'),
-    title: 'Two tabs: Expenses and Shopping',
-    body: 'Switch between “Expenses” (who paid, who owes) and “Shopping” (what to buy) right here at the top. Let’s look at each.',
-    place: 'auto',
+    title: 'Expenses & Shopping together',
+    body: 'This tab holds both shared expenses (who paid, who owes) and the shopping list, switched via the two tabs at the top. Set shared purchasing rules — a monthly budget and preferred products/stores — and watch the budget line track this month’s spending (it never blocks a purchase).',
   },
-  {
-    id: 'expenses-add',
-    route: '#/money/expenses',
-    find: firstVisible('[data-action="add-expense"]'),
-    title: 'Add an expense',
-    body: 'Record something someone paid for. Enter the amount, who paid, and split it between roommates. To change a price later, open the expense’s menu and choose Edit.',
-    place: 'auto',
+  calendar: {
+    find: firstVisible('[data-action="add-event"]', 'main'),
+    title: 'The shared calendar',
+    body: 'Quiet hours, guests, away days and plans live here. Use “Add event” to pick a type and set start/end dates and times.',
   },
-  {
-    id: 'expenses-balance',
-    route: '#/money/expenses',
-    find: firstVisible('.panel-soft'),
-    title: 'Balances update automatically',
-    body: 'Your balance and “who owes whom” recalculate every time an expense or repayment changes. No math on your end.',
-    place: 'auto',
+  profile: {
+    find: firstVisible('.profile-head', 'main'),
+    title: 'Your roommate profile',
+    body: 'Set dietary notes, a personal budget, and your personal rules so the household can see your preferences. This is a local, interim profile — no account or sync yet.',
   },
-  {
-    id: 'nav-shopping',
-    route: '#/money/expenses',
-    find: firstVisible('.tabs a[href="#/money/shopping"]'),
-    title: 'Open the Shopping tab',
-    body: 'Here’s the shopping list. Tap it to see what the apartment needs and to add items.',
-    place: 'auto',
-    advanceHint: 'shopping',
-  },
-  {
-    id: 'shopping-add',
-    route: '#/money/shopping',
-    find: firstVisible('.quick-add #qa-name', '.quick-add'),
-    title: 'Add an item fast',
-    body: 'Type an item name (and optional quantity) and press Add. It drops straight into “Needed”. Anyone can claim an item to say they’ll buy it.',
-    place: 'auto',
-  },
-  {
-    id: 'shopping-purchase',
-    route: '#/money/shopping',
-    find: firstVisible('#need .chk[data-action="purchase"]', '.chk[data-action="purchase"]'),
-    title: 'Buy it, and set the price',
-    body: 'When you’ve bought something, tap its circle to mark it purchased. You’ll be asked for the price — that creates a shared expense automatically and splits it, so Shopping and Expenses stay in sync.',
-    place: 'auto',
-  },
-  {
-    id: 'nav-calendar',
-    route: '#/money/shopping',
-    find: firstVisible('.sidebar .nav[href="#/calendar"]', '.bottomnav a[href="#/calendar"]'),
-    title: 'Calendar tab',
-    body: 'Last stop: the shared calendar for quiet hours, guests, away days and plans. Tap here.',
-    place: 'auto',
-    advanceHint: 'calendar',
-  },
-  {
-    id: 'calendar-add',
-    route: '#/calendar',
-    find: firstVisible('[data-action="add-event"]'),
-    title: 'Add an event and set the time',
-    body: 'Use “Add event” to pick a type, a start and end date, and start/end times. To change a time later, open the event and choose Edit — update the time fields and save.',
-    place: 'auto',
-  },
-  {
-    id: 'done',
-    route: '#/home',
-    find: firstVisible('.household'),
-    title: 'That’s the tour',
-    body: 'You know where chores, expenses, shopping and the calendar live, and how to add to each. Replay this anytime from Settings → Replay tutorial.',
-    place: 'center',
-  },
-];
+};
 
-// ---------- engine ----------
-let active = null;
-
-export function startTour({ navigate, track, storage, onEnd } = {}) {
-  if (active) endTour();
+// Show a single-step coachmark for `tab`, reusing the tour's ring/card chrome and positioning.
+// Returns true if a coachmark was displayed, false if the tab has no content. `track` logs
+// shown/seen analytics via the existing on-device analytics (6.7). `onEnd` fires on dismissal.
+export function showCoachmark({ tab, storage, track, onEnd } = {}) {
+  const content = COACHMARKS[tab];
+  if (!content) { onEnd && onEnd({ tab, shown: false }); return false; }
+  if (active) endCoachmark();
+  const trackFn = track || (() => {});
   active = {
     i: 0,
-    navigate: navigate || ((hash) => { location.hash = hash; }),
-    track: track || (() => {}),
+    coach: true,
+    tab,
+    content,
+    navigate: () => {},
+    track: trackFn,
     storage,
-    onEnd,
+    onEnd: (res) => onEnd && onEnd({ tab, shown: true, ...res }),
     els: buildChrome(),
     keyHandler: null,
     resizeHandler: null,
   };
-  active.track('tutorial_started', { steps: STEPS.length });
+  trackFn('coachmark_shown', { tab });
   bindGlobalHandlers();
-  go(0);
+  renderCoachmark();
   return true;
 }
 
-export function endTour({ completed = false } = {}) {
+function renderCoachmark() {
+  if (!active || !active.coach) return;
+  const { progress, title, text, back, next } = active.els;
+  const { content } = active;
+  progress.textContent = '';
+  title.textContent = content.title;
+  text.textContent = content.body;
+  back.hidden = true;
+  next.textContent = 'Got it';
+  // Single step: resolve the anchor with a few retries (covers async re-render), center-fallback otherwise.
+  resolveCoachAnchor(content, 6);
+}
+
+function resolveCoachAnchor(content, triesLeft) {
+  if (!active || active.content !== content) return;
+  const el = content.find ? content.find() : null;
+  if (el || triesLeft <= 0) {
+    active._lastEl = el || null;
+    position(el || null, el ? 'auto' : 'center');
+    if (el) try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { /* older browsers */ }
+    // non-blocking tip: do not steal focus from the page. The card stays in the tab order and is
+    // dismissable via its buttons or Escape; grabbing focus here would disrupt a user mid-task.
+    return;
+  }
+  setTimeout(() => resolveCoachAnchor(content, triesLeft - 1), 90);
+}
+
+// ---------- engine ----------
+let active = null;
+
+// Tear down the active coachmark: remove chrome + global handlers, log the "seen" event, fire onEnd.
+export function endCoachmark({ completed = false } = {}) {
   if (!active) return;
-  const { els, keyHandler, resizeHandler, storage, onEnd, i } = active;
+  const { els, keyHandler, resizeHandler, onEnd, tab } = active;
   if (keyHandler) document.removeEventListener('keydown', keyHandler, true);
   if (resizeHandler) { window.removeEventListener('resize', resizeHandler); window.removeEventListener('scroll', resizeHandler, true); }
   els.root.remove();
-  if (storage) markSeen(storage);
-  active.track(completed ? 'tutorial_completed' : 'tutorial_skipped', { step: i, stepId: STEPS[i] && STEPS[i].id });
+  // Coachmarks persist their own per-tab seen-state (via markCoachSeen in app wiring).
+  active.track('coachmark_seen', { tab });
   active = null;
   onEnd && onEnd({ completed });
 }
 
 function buildChrome() {
   const root = document.createElement('div');
-  root.className = 'tour-root';
+  root.className = 'tour-root tour-coach';
   root.innerHTML = `
     <div class="tour-backdrop" data-tour="backdrop"></div>
     <div class="tour-ring" data-tour="ring" hidden></div>
-    <div class="tour-card" data-tour="card" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-body">
+    <div class="tour-card" data-tour="card" role="dialog" aria-modal="false" aria-labelledby="tour-title" aria-describedby="tour-body">
       <p class="tour-step" data-tour="progress"></p>
       <h2 id="tour-title" data-tour="title"></h2>
       <p id="tour-body" data-tour="text"></p>
@@ -203,63 +167,27 @@ function buildChrome() {
   document.body.appendChild(root);
   const pick = (n) => root.querySelector(`[data-tour="${n}"]`);
   const els = { root, backdrop: pick('backdrop'), ring: pick('ring'), card: pick('card'), progress: pick('progress'), title: pick('title'), text: pick('text'), skip: pick('skip'), back: pick('back'), next: pick('next') };
-  els.skip.addEventListener('click', () => endTour({ completed: false }));
-  els.back.addEventListener('click', () => go(active.i - 1));
-  els.next.addEventListener('click', () => {
-    if (active.i >= STEPS.length - 1) return endTour({ completed: true });
-    go(active.i + 1);
-  });
+  els.skip.addEventListener('click', () => endCoachmark({ completed: false }));
+  els.next.addEventListener('click', () => endCoachmark({ completed: true }));
   // Clicking the dimmed backdrop does nothing destructive (prevents accidental dismissal); Skip is explicit.
   els.backdrop.addEventListener('click', (e) => e.stopPropagation());
   return els;
 }
 
 function bindGlobalHandlers() {
+  // non-blocking: only Escape dismisses, and only when it isn't closing an open modal dialog.
+  // We must NOT hijack Enter/ArrowRight/typing — the page (forms, menus) owns the keyboard while
+  // a coachmark floats. Bubble phase (not capture) so modal/menu handlers get the key first.
   active.keyHandler = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endTour({ completed: false }); }
-    else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); active.els.next.click(); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); if (active.i > 0) go(active.i - 1); }
+    if (e.key !== 'Escape') return;
+    const modal = document.getElementById('modal');
+    if (modal && modal.open) return; // let the dialog handle its own Escape
+    endCoachmark({ completed: false });
   };
-  document.addEventListener('keydown', active.keyHandler, true);
+  document.addEventListener('keydown', active.keyHandler);
   active.resizeHandler = () => { if (active) position(active._lastEl); };
   window.addEventListener('resize', active.resizeHandler);
   window.addEventListener('scroll', active.resizeHandler, true);
-}
-
-function go(index) {
-  if (!active) return;
-  const i = Math.max(0, Math.min(STEPS.length - 1, index));
-  active.i = i;
-  const step = STEPS[i];
-  active.track('tutorial_step', { step: i, stepId: step.id });
-
-  // Navigate if this step lives on another route, then wait for the app to re-render.
-  const needNav = step.route && location.hash !== step.route;
-  if (needNav) active.navigate(step.route);
-
-  const { progress, title, text, back, next } = active.els;
-  progress.textContent = `Step ${i + 1} of ${STEPS.length}`;
-  title.textContent = step.title;
-  text.textContent = step.body;
-  back.hidden = i === 0;
-  next.textContent = i >= STEPS.length - 1 ? 'Finish' : 'Next';
-
-  // Resolve the anchor element with a few retries (covers async re-render after navigation).
-  resolveAnchor(step, needNav ? 12 : 6);
-}
-
-function resolveAnchor(step, triesLeft) {
-  if (!active || STEPS[active.i] !== step) return;
-  const el = step.find ? step.find() : null;
-  if (el || triesLeft <= 0 || step.place === 'center') {
-    active._lastEl = el || null;
-    position(el || null, step.place);
-    if (el) try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { /* older browsers */ }
-    // Focus the card so keyboard users land in the tour, not the page behind it.
-    setTimeout(() => active && active.els.card.focus?.(), 60);
-    return;
-  }
-  setTimeout(() => resolveAnchor(step, triesLeft - 1), 90);
 }
 
 // Place the spotlight ring over `el` and the card near it, kept inside the viewport.

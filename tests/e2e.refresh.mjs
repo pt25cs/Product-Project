@@ -16,6 +16,9 @@ async function run(width, height) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   const st = (fn, a) => page.evaluate(fn, a);
   const shot = (n) => shots && page.screenshot({ path: `${shots}/${n}-${width}.png` });
+  // Pre-seed per-tab coachmarks as seen so the non-blocking tip overlay doesn't sit over
+  // controls during feature flows (onboarding itself is covered by coachmarks.test.mjs).
+  await page.addInitScript(() => { try { localStorage.setItem('roomsync.coach.v1', JSON.stringify({ home: true, chores: true, money: true, calendar: true, profile: true })); } catch (e) {} });
   await page.goto(BASE);
   await page.getByRole('button', { name: /Try the demo/ }).click();
   await page.getByRole('heading', { name: 'Today', level: 1 }).waitFor();

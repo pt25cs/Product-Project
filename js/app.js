@@ -1,7 +1,7 @@
 import * as L from './logic.js';
 import { createStore, STARTER_CHORES } from './store.js';
 import { $, $$, esc, plural, ic, toast, field, input, select, segmented, checkGroup, openModal, closeModal, initModal, confirmDialog, showErrors, formData, menu, initMenus } from './ui.js';
-import { startTour, endTour, tourSeen, resetTourSeen } from './tour.js';
+import { showCoachmark, endCoachmark, coachSeen, markCoachSeen, resetCoachmarks } from './tour.js';
 
 // ---------- boot ----------
 let storage;
@@ -12,17 +12,6 @@ try { storage = window.localStorage; storage.getItem('roomsync.probe'); } catch 
 const store = createStore({ storage });
 const app = $('#app');
 
-// Launch the guided tour. `force` re-runs it even if it was seen before (used by Settings → Replay).
-function launchTour(force = false) {
-  if (!store.state) return;
-  if (!force && tourSeen(storage)) return;
-  startTour({
-    storage,
-    navigate: (hash) => { if (location.hash !== hash) { location.hash = hash; } ui.handled = null; render(); },
-    track: (name, props) => store.trackEvent(name, props),
-    onEnd: () => render(), // refresh so the Settings "events recorded" count stays current
-  });
-}
 const ui = { statsWeek: null, calSel: null, calView: null, open: {}, welcome: null, handled: null, focusAfter: null };
 let loadError = null;
 const narrowMQ = window.matchMedia('(max-width: 859px)');
@@ -62,6 +51,8 @@ function eventWhen(ev) {
 const afterDelete = () => {
   if (store.undoLabel) toast(store.undoLabel, { action: 'Undo', onAction: () => { store.undoLast(); toast('Restored.'); } });
 };
+// Toast options that offer one-step undo for the just-resolved swap, when the store snapshotted one (2.11).
+const afterSwap = () => (store.undoLabel ? { action: 'Undo', onAction: () => { store.undoLast(); toast('Swap undone.'); } } : {});
 const memberOpts = () => store.state.members.map((m) => [m.id, m.id === store.me() ? `${m.name} (you)` : m.name]);
 
 // ---------- routing ----------
@@ -78,6 +69,22 @@ function dueMeta(o) {
   if (d === 1) return `<span class="due">${ic('calendar', 13)}Tomorrow</span>`;
   return `<span class="due">${ic('calendar', 13)}${L.fmtDay(o.due)}</span>`;
 }
+// Swap options for an occurrence's "More actions" menu (Requirement 2): only for occurrences
+// I currently own that are still open and not already tied to a pending swap.
+function swapMenuItems(o) {
+  if (o.assigneeId !== store.me() || o.doneAt) return [];
+  const pending = store.state.swaps.some((s) => s.status === 'pending' && (s.occId === o.id || s.targetOccId === o.id));
+  if (pending) return [];
+  const items = [{ label: 'Ask someone to take this', icon: 'user', action: 'request-open-swap', data: { id: o.id } }];
+  // A direct trade needs at least one open occurrence owned by another roommate to offer against.
+  if (otherOpenOccs(o.id).length) items.push({ label: 'Offer a trade…', icon: 'repeat', action: 'offer-trade', data: { id: o.id } });
+  return ['-', ...items];
+}
+// Open occurrences assigned to roommates other than me, excluding one occurrence id (my own).
+function otherOpenOccs(exceptId) {
+  const me = store.me();
+  return store.state.occurrences.filter((x) => !x.doneAt && x.id !== exceptId && x.assigneeId !== me && store.state.members.some((m) => m.id === x.assigneeId));
+}
 function choreRow(o, { ctx = 'x', details = false, owner = false } = {}) {
   const mine = o.assigneeId === store.me();
   const c = store.sel.chore(o);
@@ -86,6 +93,7 @@ function choreRow(o, { ctx = 'x', details = false, owner = false } = {}) {
     : avatar(o.assigneeId);
   const items = [{ label: 'Edit chore', icon: 'edit', action: 'edit-chore', data: { id: o.id } }];
   if (!mine) items.push({ label: 'Mark done (I did it)', icon: 'check', action: 'complete', data: { id: o.id } }, { label: 'Reassign to me', icon: 'user', action: 'reassign-me', data: { id: o.id } });
+  items.push(...swapMenuItems(o));
   items.push('-', { label: 'Delete chore', icon: 'trash', action: 'delete-chore', data: { id: o.id }, danger: true });
   const next = details && c && c.rotation.length ? `<span>Next: ${esc(who(L.nextAssigneeId(c, o)))}</span>` : '';
   return `<li class="row" id="occ-${o.id}"><div class="row-lead">${lead}</div><div class="row-main"><div class="row-title"><button type="button" class="title-btn" data-action="view-chore" data-id="${o.id}">${esc(o.title)}</button></div>
@@ -122,6 +130,30 @@ function balanceBlock({ full = false } = {}) {
 function eventRow(ev) {
   return `<li class="row"><div class="row-lead"><span class="ag-ic cat-${ev.category}">${ic(CAT_ICON[ev.category], 14)}</span></div><div class="row-main"><div class="row-title"><button type="button" class="title-btn" data-action="view-event" data-id="${ev.id}">${esc(ev.title)}</button></div><div class="row-meta"><span>${esc(eventWhen(ev))}</span></div></div></li>`;
 }
+// Remaining-budget line shown near the monthly spending total (Requirement 4.4). Display only,
+// never blocks. Shows nothing special when no budget is set, but always offers a way to set/change it.
+function budgetLine() {
+  const b = store.sel.budgetStatus();
+  if (!b.set) return `<p class="small muted" style="margin-top:4px">No shared monthly budget set. <button type="button" class="btn quiet sm" data-action="set-budget">Set a budget</button></p>`;
+  const status = b.over
+    ? `<span class="chip warning">${ic('alert', 12)}Over by ${money(-b.remainingCents)}</span>`
+    : `<span class="chip success">${ic('check', 12)}${money(b.remainingCents)} left</span>`;
+  return `<p class="small" style="margin-top:6px">Shared budget ${money(b.budgetCents)} · ${status} <button type="button" class="btn quiet sm" data-action="set-budget" aria-label="Change shared budget">Change</button></p>`;
+}
+// Non-blocking purchasing-rule hint for the shopping flow (Requirement 4.3). Surfaces preferred
+// products / store preferences / budget status as informational guidance only — never blocks.
+function shoppingHint() {
+  const p = store.state.purchasing || {};
+  const pp = (p.preferredProducts || []).map((x) => x.text);
+  const sp = (p.storePreferences || []).map((x) => x.text);
+  const b = store.sel.budgetStatus();
+  const bits = [];
+  if (pp.length) bits.push(`Preferred: ${pp.slice(0, 3).map(esc).join(', ')}${pp.length > 3 ? ` +${pp.length - 3} more` : ''}`);
+  if (sp.length) bits.push(`Stores: ${sp.slice(0, 3).map(esc).join(', ')}${sp.length > 3 ? ` +${sp.length - 3} more` : ''}`);
+  if (b.set) bits.push(b.over ? `Over the shared budget by ${money(-b.remainingCents)}` : `${money(b.remainingCents)} left in the shared budget`);
+  if (!bits.length) return '';
+  return `<div class="panel-soft" style="margin-bottom:12px"><p class="small"><strong>${ic('info', 14)}Purchasing rules</strong> ${bits.join(' · ')}</p><p class="hint" style="margin-top:4px">Guidance only — RoomSync never blocks a purchase. Manage these in <a href="#/settings">Settings</a>.</p></div>`;
+}
 function shopRowCompact(i) {
   return `<li class="row"><div class="row-main"><div class="row-title">${esc(i.name)} <span class="muted" style="font-weight:400">× ${esc(i.qty)}</span></div><div class="row-meta"><span>${i.buyerId ? `${esc(who(i.buyerId))} claimed` : 'Unclaimed'}</span></div></div></li>`;
 }
@@ -155,6 +187,31 @@ function viewHome() {
   return `<div class="page-head"><div><h1>Today</h1><p class="sub">${greet}, ${esc(name(me))} · ${L.fmtDay(t)}</p></div></div><div class="dash"><div class="dash-col">${mainCol}</div><div class="dash-col">${sideCol}</div></div>`;
 }
 
+// ---------- Swap requests (Requirement 2 UI) ----------
+const occTitle = (id) => { const o = store.state.occurrences.find((x) => x.id === id); return o ? o.title : 'a chore'; };
+function swapRequestsSection() {
+  const incoming = store.sel.incomingSwaps(), open = store.sel.openSwaps(), outgoing = store.sel.outgoingSwaps();
+  if (!incoming.length && !open.length && !outgoing.length) return '';
+  const row = (lead, main, buttons) => `<li class="row"><div class="row-lead">${lead}</div><div class="row-main"><div class="row-title">${main}</div></div><div class="row-side">${buttons}</div></li>`;
+  const btn = (action, id, label, cls = 'quiet') => `<button type="button" class="btn ${cls} sm" data-action="${action}" data-id="${id}" aria-label="${esc(label)}">${label}</button>`;
+  const lines = [];
+  // Direct proposals addressed to me: accept (swap) or decline (2.6/2.7).
+  for (const s of incoming) lines.push(row(avatar(s.requesterId),
+    `${esc(store.nameOf(s.requesterId))} offers <strong>${esc(occTitle(s.occId))}</strong> for your <strong>${esc(occTitle(s.targetOccId))}</strong>`,
+    `<button type="button" class="btn primary sm" data-action="respond-direct-swap" data-id="${s.id}" data-accept="1" aria-label="Accept trade">Accept</button><button type="button" class="btn quiet sm" data-action="respond-direct-swap" data-id="${s.id}" data-accept="0" aria-label="Decline trade">Decline</button>`));
+  // Open requests posted to the household that I can take (2.2).
+  for (const s of open) lines.push(row(avatar(s.requesterId),
+    `${esc(store.nameOf(s.requesterId))} is asking someone to take <strong>${esc(occTitle(s.occId))}</strong>`,
+    btn('accept-open-swap', s.id, 'Take it', 'primary')));
+  // My own pending requests/proposals: cancel (2.4).
+  for (const s of outgoing) lines.push(row(ic('repeatSm', 18),
+    s.kind === 'open'
+      ? `You asked someone to take <strong>${esc(occTitle(s.occId))}</strong>`
+      : `You offered <strong>${esc(occTitle(s.occId))}</strong> to ${esc(store.nameOf(s.addresseeId))} for <strong>${esc(occTitle(s.targetOccId))}</strong>`,
+    btn('cancel-swap', s.id, 'Cancel')));
+  return sec('swaps', 'Swap requests', `<ul class="list">${lines.join('')}</ul>`, { count: lines.length, icon: 'repeat' });
+}
+
 // ---------- Chores ----------
 function viewChores(tab) {
   ui.statsWeek ||= L.startOfWeek(today());
@@ -173,7 +230,7 @@ function viewChores(tab) {
   }
   const tabs = [['mine', 'Mine'], ['all', 'All chores'], ['done', 'Completed']];
   return `<div class="page-head"><h1>Chores</h1></div>
-  <nav class="tabs" aria-label="Chore views">${tabs.map(([k, l]) => `<a href="#/chores/${k}"${tab === k ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav>${body}${disclosure('stats', 'Weekly counts by roommate', statsBody)}`;
+  <nav class="tabs" aria-label="Chore views">${tabs.map(([k, l]) => `<a href="#/chores/${k}"${tab === k ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav>${swapRequestsSection()}${body}${disclosure('stats', 'Weekly counts by roommate', statsBody)}`;
 }
 
 // ---------- Expenses & shopping ----------
@@ -196,6 +253,7 @@ function viewMoney(tab) {
     return `<div class="page-head"><h1>Expenses &amp; shopping</h1></div>${tabsNav}
       <form data-inline="add-item" class="quick-add" novalidate><div class="grow"><label class="sr-only" for="qa-name">Add an item</label><input type="text" id="qa-name" name="name" placeholder="Add an item" maxlength="60" autocomplete="off"><p class="field-error" id="qa-err" role="alert" hidden></p></div>
         <div class="qty"><label class="sr-only" for="qa-qty">Quantity</label><input type="text" id="qa-qty" name="qty" placeholder="Qty" maxlength="20" autocomplete="off"></div><button type="submit" class="btn primary">Add</button></form>
+      ${shoppingHint()}
       ${sec('need', 'Needed', needed.length ? `<ul class="list">${needed.map(row).join('')}</ul>` : empty('Nothing needed right now', 'Type above to add something the apartment is running low on.'), { count: needed.length })}
       ${disclosure('bought', `Purchased <span class="count">${bought.length}</span>`, bought.length ? `<ul class="list">${bought.map(histRow).join('')}</ul>` : empty('Nothing purchased yet', 'Purchased items are kept here so you can add them again.'))}`;
   }
@@ -217,7 +275,7 @@ function viewMoney(tab) {
   return `<div class="page-head"><h1>Expenses &amp; shopping</h1></div>${tabsNav}
     <div class="sec"><div class="panel-soft"><h2 style="margin-bottom:8px">Your balance</h2>${balanceBlock({ full: true })}</div></div>
     ${sec('hist', 'Expenses and repayments', (hist.length ? `<ul class="list">${hist.map((h) => (h.k === 'e' ? expRow(h.v) : reRow(h.v))).join('')}</ul>` : empty('No expenses yet', 'Add the first shared expense, like utilities or groceries.')) + addRow('add-expense', 'Add expense') + (owesSomeone ? '' : addRow('add-reimb', 'Record repayment')))}
-    ${sec('tot', `Household spending in ${L.fmtMonth(today()).split(' ')[0]}`, `<p class="balance-line money" style="padding-top:12px">${money(store.sel.monthTotal())}</p><p class="hint">Expenses dated this month. Repayments aren’t counted as spending.</p>`)}
+    ${sec('tot', `Household spending in ${L.fmtMonth(today()).split(' ')[0]}`, `<p class="balance-line money" style="padding-top:12px">${money(store.sel.monthTotal())}</p>${budgetLine()}<p class="hint">Expenses dated this month. Repayments aren’t counted as spending.</p>`)}
     ${disclosure('balances', 'Everyone’s balance', balances)}`;
 }
 
@@ -270,6 +328,34 @@ function viewCalendar() {
   return `<div class="page-head"><h1>Calendar</h1></div>${bar}${body}<div class="legend" aria-label="Legend">${Object.keys(L.CATEGORIES).map(catPill).join('')}<span class="cat-pill" style="background:var(--color-surface-subtle);color:var(--color-text-secondary)">${ic('chores', 14)}Chore</span></div>`;
 }
 
+// ---------- Profile (Requirement 5) ----------
+// A dedicated #/profile route (not a Settings section) so Profile earns its own per-tab
+// coachmark (6.1). The current roommate's fields are editable (5.1); other roommates' profiles
+// are read-only (5.2). An interim banner makes clear this is local-only, no account/sync (5.5).
+const profileField = (label, value) => `<div><dt>${esc(label)}</dt><dd>${value ? esc(value) : '<span class="muted">Not set yet</span>'}</dd></div>`;
+function otherProfileCard(m) {
+  const p = m.profile || {};
+  return `<section class="sec" aria-labelledby="pf-${m.id}"><div class="sec-head"><h3 id="pf-${m.id}">${avatar(m.id)} ${esc(m.name)}</h3></div>
+    <dl class="details">${profileField('Dietary', p.dietary)}${profileField('Personal budget', p.budgetCents != null ? money(p.budgetCents) : '')}${profileField('Personal rules', p.rules)}</dl></section>`;
+}
+function viewProfile() {
+  const me = store.me(), m = store.state.members.find((x) => x.id === me) || {};
+  const p = m.profile || { dietary: '', budgetCents: null, rules: '' };
+  const budgetVal = p.budgetCents != null ? (p.budgetCents / 100).toFixed(2) : '';
+  const others = store.state.members.filter((x) => x.id !== me);
+  const banner = `<div class="panel-soft" style="margin-bottom:16px"><p class="small"><strong>${ic('info', 14)}Local only — no account or sync yet</strong></p><p class="hint" style="margin-top:4px">This interim profile is saved in this browser on this device. There are no accounts, no sync, and no privacy guarantee. Real synced profiles come later.</p></div>`;
+  const form = `<form data-inline="profile" novalidate style="padding-top:12px">
+    <div class="field"><label for="f-dietary">Dietary restrictions / preferences <span class="opt">(optional)</span></label><textarea id="f-dietary" name="dietary" class="qa-notes" maxlength="300" placeholder="e.g. Vegetarian, no nuts">${esc(p.dietary)}</textarea><p class="field-error" id="err-dietary" hidden></p></div>
+    ${field('budgetCents', 'Personal monthly budget (USD)', input('budgetCents', budgetVal, 'inputmode="decimal" placeholder="0.00" autocomplete="off"'), { optional: true, hint: 'Just for you. RoomSync shows this as information only and never blocks spending.' })}
+    <div class="field"><label for="f-rules">Personal roommate rules <span class="opt">(optional)</span></label><textarea id="f-rules" name="rules" class="qa-notes" maxlength="300" placeholder="e.g. Please knock before coming into my room">${esc(p.rules)}</textarea><p class="field-error" id="err-rules" hidden></p></div>
+    <button type="submit" class="btn primary">Save profile</button></form>`;
+  const mine = sec('me-profile', `Your profile`, form, { icon: 'user' });
+  const othersBlock = others.length
+    ? sec('others-profile', 'Other roommates', others.map(otherProfileCard).join(''))
+    : '';
+  return `<div class="page-head profile-head"><div><h1>Profile</h1><p class="sub">for ${esc(m.name || 'you')}</p></div></div>${banner}${mine}${othersBlock}`;
+}
+
 // ---------- Notifications ----------
 function viewNotifications() {
   const list = store.sel.notifications();
@@ -284,16 +370,54 @@ function viewNotifications() {
 }
 
 // ---------- Settings ----------
+// Shared "House expectations" list (Requirement 3). Each item shows its text with a light
+// who/when line and Edit/Remove controls; an "Add expectation" row opens a small modal.
+function expectationsSection() {
+  const list = store.state.expectations || [];
+  const stamp = (e) => {
+    const changed = e.updatedAt && e.updatedAt !== e.createdAt;
+    const byId = changed ? e.updatedBy : e.createdBy;
+    const verb = changed ? 'Updated' : 'Added';
+    return byId ? `<div class="row-meta"><span>${verb} by ${esc(who(byId))}</span></div>` : '';
+  };
+  const row = (e) => `<li class="row" id="expect-${e.id}"><div class="row-main"><div class="row-title">${esc(e.text)}</div>${stamp(e)}</div>
+    <div class="row-side"><button type="button" class="btn quiet sm" data-action="edit-expectation" data-id="${e.id}" aria-label="Edit expectation: ${esc(e.text)}">${ic('edit', 16)}Edit</button>${menu({ id: `exp-${e.id}`, label: `More actions for expectation: ${e.text}`, items: [{ label: 'Remove expectation', icon: 'trash', action: 'remove-expectation', data: { id: e.id }, danger: true }] })}</div></li>`;
+  const body = (list.length ? `<ul class="list">${list.map(row).join('')}</ul>` : empty('No expectations yet', 'Agree on shared norms like “quiet after 11pm” or “dishes done same day”.')) + addRow('add-expectation', 'Add expectation');
+  return sec('expect', 'House expectations', body, { count: list.length || null });
+}
+// Shared "Purchasing rules" block (Requirement 4): budget, preferred products, store preferences.
+function purchasingRulesSection() {
+  const p = store.state.purchasing || { budgetCents: null, preferredProducts: [], storePreferences: [] };
+  const budget = p.budgetCents != null
+    ? `<p style="padding-top:12px">Shared monthly budget: <strong class="money">${money(p.budgetCents)}</strong></p><p style="margin-top:8px"><button type="button" class="btn sm" data-action="set-budget">Change budget</button></p>`
+    : `<p class="small muted" style="padding-top:12px">No shared budget set. Set one to track monthly spending against it.</p><p style="margin-top:8px"><button type="button" class="btn sm" data-action="set-budget">Set budget</button></p>`;
+  const listBlock = (title, items, addAction, addLabel, removeAction, kind) => {
+    const rows = items.length
+      ? `<ul class="list">${items.map((it) => `<li class="row"><div class="row-main"><div class="row-title">${esc(it.text)}</div></div><div class="row-side"><button type="button" class="btn quiet sm" data-action="${removeAction}" data-id="${it.id}" aria-label="Remove ${kind}: ${esc(it.text)}">${ic('trash', 16)}Remove</button></div></li>`).join('')}</ul>`
+      : `<p class="small muted" style="padding-top:8px">None yet.</p>`;
+    return `<h3 style="margin-top:16px">${esc(title)}</h3>${rows}${addRow(addAction, addLabel)}`;
+  };
+  return sec('purchrules', 'Purchasing rules', `${budget}
+    ${listBlock('Preferred products', p.preferredProducts || [], 'add-preferred-product', 'Add preferred product', 'remove-preferred-product', 'preferred product')}
+    ${listBlock('Store preferences', p.storePreferences || [], 'add-store-preference', 'Add store preference', 'remove-store-preference', 'store preference')}
+    <p class="hint">Shared buying standards. They appear as non-blocking guidance in the shopping flow — RoomSync never blocks spending.</p>`, { icon: 'cart' });
+}
 function viewSettings() {
   const s = store.state, p = store.prefsOf(store.me());
   const toggleRow = (nm, label, checked) => `<label class="inline-check"><input type="checkbox" name="${nm}" ${checked ? 'checked' : ''} data-change="pref"> ${label}</label>`;
   return `<div class="page-head"><h1>Settings</h1></div>
   ${sec('hh', 'Household', `<p style="padding-top:12px"><strong style="color:var(--color-text)">${esc(s.household.name)}</strong></p><p class="small muted">${s.members.map((m) => esc(m.name)).join(', ')}</p><p class="small" style="margin-top:8px">${s.mode === 'demo' ? 'This is a demo household with fictional roommates.' : 'Your household.'} Use <strong>Viewing as</strong> to switch between roommates.</p>`)}
+  ${expectationsSection()}
+  ${purchasingRulesSection()}
   ${sec('pref', `Reminders for ${name(store.me())}`, `<form data-inline="prefs" style="padding-top:12px">${toggleRow('reminders', 'Remind me when my chores are due soon or overdue', p.reminders)}
     <div class="field" style="max-width:320px;margin-top:8px"><label for="f-leadDays">Remind me</label>${select('leadDays', [[0, 'On the day it’s due'], [1, '1 day before'], [2, '2 days before']], p.leadDays, 'data-change="pref"')}</div>
     ${toggleRow('updates', 'Tell me about assignments, shared expenses and calendar changes', p.updates)}</form><p class="hint">Reminders appear in RoomSync’s notification list while the app is open. Background push, email and text messages aren’t part of this version.</p>`)}
+  ${sec('channels', `Notification channels for ${name(store.me())}`, `<form data-inline="channels" style="padding-top:12px">
+    <label class="inline-check"><input type="checkbox" name="inApp" checked disabled data-change="pref-channels"> In-app notifications <span class="muted">(always on)</span></label>
+    <label class="inline-check"><input type="checkbox" name="push" ${p.channels.push ? 'checked' : ''} data-change="pref-channels"> Push notifications <span class="muted">(coming soon)</span></label>
+    <label class="inline-check"><input type="checkbox" name="sms" ${p.channels.sms ? 'checked' : ''} data-change="pref-channels"> Text messages / SMS <span class="muted">(coming soon)</span></label></form><p class="hint">Only in-app delivery works in this version. Your push and text message choices are saved for a future update but don’t send anything yet.</p>`)}
   ${disclosure('proto', 'About this prototype', `<ul class="small" style="margin:0;padding-left:18px"><li>Data is saved in this browser on this device. It doesn’t sync to other devices.</li><li>There are no accounts or invite codes. “Viewing as” switches between the roommates stored here.</li><li>Notifications are in-app only.</li><li>Repayments update RoomSync’s records. RoomSync never moves money.</li></ul>`)}
-  ${sec('guide', 'Getting started', `<p class="small" style="padding-top:12px">New here, or showing someone else around? Replay the guided tour that walks through each tab and the most common tasks.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="replay-tour">${ic('info', 16)}Replay tutorial</button></p>`)}
+  ${sec('guide', 'Getting started', `<p class="small" style="padding-top:12px">New here, or showing someone else around? Show the getting-started tips again — each tab’s quick tip reappears the next time you open it.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="replay-tour">${ic('info', 16)}Show the getting-started tips again</button></p>`)}
   ${sec('res', 'Research tools', `<p class="small" style="padding-top:12px">RoomSync logs basic usage events on this device only (household created, chores assigned and completed, expenses, purchases, calendar events, tutorial progress). Nothing is uploaded. ${plural(s.analytics.length, 'event')} recorded.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="export">Download events (JSON)</button></p>`)}
   ${sec('danger', 'Danger zone', `<p class="small" style="padding-top:12px">${s.mode === 'demo' ? 'Resets the demo and returns to the welcome screen.' : 'Permanently deletes this household’s data from this browser.'}</p><p style="margin-top:12px"><button type="button" class="btn danger-outline" data-action="reset">${s.mode === 'demo' ? 'Reset demo' : 'Delete all data'}</button></p>`, { danger: true })}`;
 }
@@ -323,7 +447,6 @@ function handleInlineForm(form) {
     if (!res.ok) return showErrors(form, res.errors);
     ui.welcome = null; location.hash = '#/home';
     toast(`Welcome to ${store.state.household.name}.`);
-    if (!tourSeen(storage)) setTimeout(() => launchTour(), 350);
   } else if (kind === 'add-item') {
     const d = formData(form), err = $('#qa-err', form);
     if (!String(d.name || '').trim()) { err.textContent = 'Type an item name to add it.'; err.hidden = false; $('#qa-name', form).setAttribute('aria-invalid', 'true'); $('#qa-name', form).focus(); return; }
@@ -331,6 +454,12 @@ function handleInlineForm(form) {
     const res = store.addItem({ name: d.name, qty: d.qty });
     if (!res.ok) { ui.focusAfter = null; err.textContent = Object.values(res.errors)[0]; err.hidden = false; return; }
     toast(`Added ${d.name.trim()}.`);
+  } else if (kind === 'profile') {
+    // Save the current roommate's interim profile (Requirement 5.1); validation errors surface inline.
+    const d = formData(form);
+    const res = store.updateProfile({ dietary: d.dietary, budgetCents: d.budgetCents, rules: d.rules });
+    if (!res.ok) return showErrors(form, res.errors);
+    toast('Profile saved.');
   }
 }
 
@@ -344,9 +473,11 @@ function openChoreForm(occ) {
       <div class="row2 stack-sm">${field('assigneeId', 'Assigned to', select('assigneeId', memberOpts(), occ ? occ.assigneeId : store.me()))}${field('due', 'Due date', `<input type="date" id="f-due" name="due" value="${occ ? occ.due : today()}">`)}</div>
       <div class="field"><label id="rec-l">Repeats</label>${segmented('recurrence', [['once', 'One time'], ['weekly', 'Weekly']], c ? c.recurrence : 'once', 'data-change="chore-form"')}</div>
       <div id="rotate-wrap" hidden><label class="inline-check"><input type="checkbox" name="rotate" data-change="chore-form" ${rotating ? 'checked' : ''}> Rotate between roommates</label>
-      <div id="rotation-wrap" hidden>${checkGroup('rotation', 'Who’s in the rotation?', store.state.members, rotating ? c.rotation : store.memberIds())}<p class="hint">Each week goes to the next person in household order. You can reassign any single week.</p></div></div>`,
+      <div id="rotation-wrap" hidden>${checkGroup('rotation', 'Who’s in the rotation?', store.state.members, rotating ? c.rotation : store.memberIds())}<p class="hint">Each week goes to the next person in household order. You can reassign any single week.</p>
+      <label class="inline-check"><input type="checkbox" name="autoRotate" data-change="chore-form" ${c && c.autoRotate ? 'checked' : ''}> Advance automatically each cycle</label>
+      <div id="cycle-wrap" hidden>${field('cycleDays', 'Cycle length', select('cycleDays', [[7, 'Weekly (7 days)'], [14, 'Every 2 weeks (14 days)'], [30, 'Monthly (30 days)']], c && c.cycleDays ? c.cycleDays : 7))}<p class="hint">When on, whose turn it is advances on this schedule even if a turn is skipped. A manual reassignment or swap wins that cycle; the rotation resumes the next one.</p></div></div></div>`,
     onSubmit: (d) => {
-      const data = { title: d.title, notes: d.notes, assigneeId: d.assigneeId, due: d.due, recurrence: d.recurrence, rotate: d.recurrence === 'weekly' && 'rotate' in d, rotation: d.rotation || [] };
+      const data = { title: d.title, notes: d.notes, assigneeId: d.assigneeId, due: d.due, recurrence: d.recurrence, rotate: d.recurrence === 'weekly' && 'rotate' in d, rotation: d.rotation || [], autoRotate: d.recurrence === 'weekly' && 'rotate' in d && 'autoRotate' in d, cycleDays: d.cycleDays };
       const res = occ ? store.editChore(occ.id, data) : store.addChore(data);
       if (res.ok) toast(occ ? 'Chore updated.' : `Added ${data.title.trim()}.`);
       return res;
@@ -356,8 +487,11 @@ function openChoreForm(occ) {
 }
 function syncChoreForm(form) {
   const weekly = form.elements.recurrence.value === 'weekly';
+  const rotating = weekly && form.elements.rotate.checked;
   $('#rotate-wrap', form).hidden = !weekly;
-  $('#rotation-wrap', form).hidden = !(weekly && form.elements.rotate.checked);
+  $('#rotation-wrap', form).hidden = !rotating;
+  // Auto-rotation only applies once a weekly chore rotates; its cycle-length control follows the checkbox.
+  $('#cycle-wrap', form).hidden = !(rotating && form.elements.autoRotate.checked);
 }
 function expenseFields(e, { description = '', payerId } = {}) {
   const amt = e.amountCents ? (e.amountCents / 100).toFixed(2) : '';
@@ -381,7 +515,7 @@ function openExpenseForm(exp) {
 function openPurchaseForm(item) {
   const form = openModal({
     title: `Purchased: ${item.name}`, submitLabel: 'Save purchase and expense',
-    body: `${tokenInput()}<div class="field"><label>What would you like to record?</label>${segmented('mode', [['cost', 'Purchase and shared cost'], ['none', 'Purchase only']], 'cost', 'data-change="purchase-form"')}</div>
+    body: `${shoppingHint()}${tokenInput()}<div class="field"><label>What would you like to record?</label>${segmented('mode', [['cost', 'Purchase and shared cost'], ['none', 'Purchase only']], 'cost', 'data-change="purchase-form"')}</div>
       <div id="expense-fields">${expenseFields({}, { description: item.name, payerId: item.buyerId })}</div><p class="hint" id="no-expense-hint" hidden>No expense will be created. You can still add one later from Expenses.</p>`,
     onSubmit: (d) => {
       const withExpense = d.mode !== 'none';
@@ -438,6 +572,69 @@ function openEventForm(ev, preset = {}) {
     },
   });
 }
+// Direct-trade picker: pick one of another roommate's open occurrences to trade mine against (2.5).
+function openTradeForm(occId) {
+  const mineOcc = byId(store.state.occurrences, occId);
+  if (!mineOcc) return;
+  const options = otherOpenOccs(occId);
+  if (!options.length) { toast('No one else has an open chore to trade right now.', { error: true }); return; }
+  const opts = options.map((o) => [o.id, `${o.title} — ${name(o.assigneeId)} · ${L.fmtDay(o.due)}`]);
+  openModal({
+    title: 'Offer a trade',
+    submitLabel: 'Send offer',
+    body: `<p class="small" style="margin-bottom:16px">Offer your <strong>${esc(mineOcc.title)}</strong> in exchange for a roommate’s chore. They’ll get a request to accept or decline.</p>
+      ${field('targetOccId', 'Trade for', select('targetOccId', opts, opts[0][0]))}`,
+    onSubmit: (d) => {
+      const res = store.proposeDirectSwap(occId, d.targetOccId);
+      if (res.ok) toast('Trade offer sent.');
+      return res.ok ? res : { ok: false, error: res.error };
+    },
+  });
+}
+// Add/edit a shared house expectation via a small textarea modal (Requirement 3).
+function openExpectationForm(exp) {
+  openModal({
+    title: exp ? 'Edit expectation' : 'Add expectation', submitLabel: exp ? 'Save changes' : 'Add expectation',
+    body: `<div class="field"><label class="sr-only" for="f-text">Expectation</label><textarea id="f-text" name="text" class="qa-notes" maxlength="300" placeholder="e.g. Quiet after 11pm on weeknights" aria-required="true">${esc(exp ? exp.text : '')}</textarea><p class="field-error" id="err-text" hidden></p></div>`,
+    onSubmit: (d) => {
+      const res = exp ? store.editExpectation(exp.id, d.text) : store.addExpectation(d.text);
+      if (res.ok) toast(exp ? 'Expectation updated.' : 'Expectation added.');
+      else return { ok: false, errors: { text: res.error } };
+      return res;
+    },
+  });
+}
+// Set or change the shared monthly purchasing budget (Requirement 4.1). Empty value clears it.
+function openBudgetForm() {
+  const cents = store.state.purchasing && store.state.purchasing.budgetCents;
+  openModal({
+    title: 'Shared monthly budget', submitLabel: 'Save budget',
+    body: `<p class="small" style="margin-bottom:16px">A shared monthly spending guide. RoomSync shows remaining budget as information only — it never blocks spending. Leave blank to clear it.</p>
+      ${field('amount', 'Monthly budget (USD)', input('amount', cents != null ? (cents / 100).toFixed(2) : '', 'inputmode="decimal" placeholder="0.00" autocomplete="off"'), { optional: true })}`,
+    onSubmit: (d) => {
+      const res = store.setPurchasingBudget(d.amount);
+      if (res.ok) toast(res.cleared ? 'Shared budget cleared.' : `Shared budget set to ${money(res.budgetCents)}.`);
+      else return { ok: false, errors: { amount: res.error } };
+      return res;
+    },
+  });
+}
+// Add a shared preferred product or store preference (Requirement 4.2). `kind` selects the store fn + copy.
+function openPurchasingItemForm(kind) {
+  const cfg = kind === 'store'
+    ? { title: 'Add store preference', label: 'Store preference', placeholder: 'e.g. Costco for bulk paper goods', add: (t) => store.addStorePreference(t), done: 'Store preference added.' }
+    : { title: 'Add preferred product', label: 'Preferred product', placeholder: 'e.g. Seventh Generation dish soap', add: (t) => store.addPreferredProduct(t), done: 'Preferred product added.' };
+  openModal({
+    title: cfg.title, submitLabel: 'Add',
+    body: `${field('text', cfg.label, input('text', '', `maxlength="300" autocomplete="off" placeholder="${esc(cfg.placeholder)}"`))}`,
+    onSubmit: (d) => {
+      const res = cfg.add(d.text);
+      if (res.ok) toast(cfg.done);
+      else return { ok: false, errors: { text: res.error } };
+      return res;
+    },
+  });
+}
 const detailRow = (icon, k, v) => `<div><dt>${ic(icon, 16)}${k}</dt><dd>${v}</dd></div>`;
 function viewChore(id) {
   const o = store.state.occurrences.find((x) => x.id === id);
@@ -446,11 +643,14 @@ function viewChore(id) {
   const rows = [detailRow('user', 'Assigned to', mine ? 'You' : esc(name(o.assigneeId)))];
   rows.push(o.doneAt ? detailRow('check', 'Completed', `${esc(who(o.doneBy))} · ${L.fmtStamp(o.doneAt)}`) : detailRow('calendar', 'Due', `${L.fmtFull(o.due)} ${dueMeta(o)}`));
   if (c && c.recurrence === 'weekly') rows.push(detailRow('repeat', 'Repeats', 'Every week'));
-  if (c && c.rotation.length && !o.doneAt) rows.push(detailRow('user', 'Next in rotation', esc(who(L.nextAssigneeId(c, o)))));
+  if (c && c.autoRotate) rows.push(detailRow('repeat', 'Auto-rotates', `Every ${plural(c.cycleDays || 7, 'day')}`));
+  if (c && c.rotation.length && !o.doneAt) rows.push(detailRow('user', 'Next in rotation', esc(who(c.autoRotate ? L.rotationAssignee(c, L.addDays(o.due, c.cycleDays || 7)) : L.nextAssigneeId(c, o)))));
+  const canSwap = mine && !o.doneAt && !store.state.swaps.some((s) => s.status === 'pending' && (s.occId === o.id || s.targetOccId === o.id));
+  const swapButtons = canSwap ? `<button type="button" class="btn" data-action="request-open-swap" data-id="${o.id}">Ask someone to take this</button>${otherOpenOccs(o.id).length ? `<button type="button" class="btn" data-action="offer-trade" data-id="${o.id}">Offer a trade…</button>` : ''}` : '';
   openModal({
     title: o.title,
     body: `<dl class="details">${rows.join('')}</dl>${o.notes ? `<div class="details-notes"><h3>Notes</h3><p>${esc(o.notes)}</p></div>` : ''}`,
-    footerExtra: o.doneAt ? '' : `<button type="button" class="btn" data-action="edit-chore-from-details" data-id="${o.id}">Edit</button><button type="button" class="btn primary" data-action="complete-from-details" data-id="${o.id}">Mark complete</button>`,
+    footerExtra: o.doneAt ? '' : `${swapButtons}<button type="button" class="btn" data-action="edit-chore-from-details" data-id="${o.id}">Edit</button><button type="button" class="btn primary" data-action="complete-from-details" data-id="${o.id}">Mark complete</button>`,
   });
 }
 function viewEvent(id) {
@@ -468,7 +668,7 @@ function viewEvent(id) {
 // ---------- actions ----------
 const byId = (list, id) => list.find((x) => x.id === id);
 const actions = {
-  'start-demo': () => { store.startDemo(); ui.welcome = null; location.hash = '#/home'; toast('Demo ready. You’re viewing as Maya.'); if (!tourSeen(storage)) setTimeout(() => launchTour(), 350); },
+  'start-demo': () => { store.startDemo(); ui.welcome = null; location.hash = '#/home'; toast('Demo ready. You’re viewing as Maya.'); },
   'show-create': () => { ui.welcome = 'create'; render(); $('#f-userName')?.focus(); },
   'hide-create': () => { ui.welcome = null; render(); },
   'add-roommate': (d, el) => { const box = $('#others'); const n = box.children.length + 1; if (n > 4) return; box.insertAdjacentHTML('beforeend', roommateRow(n)); $$('input', box).at(-1).focus(); if (n >= 4) el.disabled = true; },
@@ -485,6 +685,18 @@ const actions = {
   },
   'undo-complete': (d) => { const r = store.undoComplete(d.id); toast(r.ok ? 'Chore is open again.' : r.error, { error: !r.ok }); },
   'reassign-me': (d) => { const o = byId(store.state.occurrences, d.id); if (store.reassignChore(d.id, store.me()).ok) toast(`${o.title} is now assigned to you.`); },
+  // ---- chore swaps (Requirement 2) ----
+  'request-open-swap': (d) => { closeModal(); const o = byId(store.state.occurrences, d.id); const r = store.requestOpenSwap(d.id); toast(r.ok ? `Asked the household to take ${o.title}.` : r.error, { error: !r.ok }); },
+  'offer-trade': (d) => { closeModal(); openTradeForm(d.id); },
+  'cancel-swap': (d) => { const r = store.cancelSwap(d.id); toast(r.ok ? 'Request cancelled.' : r.error, { error: !r.ok }); },
+  'accept-open-swap': (d) => { const r = store.acceptOpenSwap(d.id); toast(r.ok ? 'You took this chore.' : r.error, { error: !r.ok, ...(r.ok ? afterSwap() : {}) }); },
+  'respond-direct-swap': (d) => {
+    const accept = d.accept === '1';
+    const r = store.respondDirectSwap(d.id, accept);
+    if (!r.ok) return toast(r.error, { error: true });
+    if (accept) toast('Trade accepted. Both chores swapped.', afterSwap());
+    else toast('Trade declined. Both chores stay as they were.');
+  },
   'delete-chore': (d) => { const o = byId(store.state.occurrences, d.id); confirmDialog({ title: 'Delete this chore?', message: `<strong>${esc(o.title)}</strong> and its upcoming occurrences will be removed. Completed history is kept.`, confirmLabel: 'Delete chore', onConfirm: () => { store.deleteChore(d.id); afterDelete(); } }); },
   'stats-week': (d) => { ui.statsWeek = Number(d.delta) === 0 ? L.startOfWeek(today()) : L.addDays(ui.statsWeek, Number(d.delta)); render(); },
   'cal-shift': (d) => { ui.calSel = L.addDays(ui.calSel || today(), Number(d.delta)); render(); },
@@ -510,6 +722,16 @@ const actions = {
   'view-event': (d) => viewEvent(d.id),
   'edit-event': (d) => { closeModal(); openEventForm(byId(store.state.events, d.id)); },
   'delete-event': (d) => { const ev = byId(store.state.events, d.id); closeModal(); confirmDialog({ title: 'Delete this event?', message: `<strong>${esc(ev.title)}</strong> will be removed from the calendar and your roommates will be notified.`, confirmLabel: 'Delete event', onConfirm: () => { store.deleteEvent(d.id); afterDelete(); } }); },
+  // ---- shared house expectations (Requirement 3) ----
+  'add-expectation': () => openExpectationForm(null),
+  'edit-expectation': (d) => openExpectationForm(byId(store.state.expectations, d.id)),
+  'remove-expectation': (d) => { const e = byId(store.state.expectations, d.id); if (!e) return; confirmDialog({ title: 'Remove this expectation?', message: `Remove <strong>${esc(e.text)}</strong> from the shared list?`, confirmLabel: 'Remove expectation', onConfirm: () => { store.removeExpectation(d.id); afterDelete(); } }); },
+  // ---- shared purchasing rules (Requirement 4) ----
+  'set-budget': () => openBudgetForm(),
+  'add-preferred-product': () => openPurchasingItemForm('product'),
+  'add-store-preference': () => openPurchasingItemForm('store'),
+  'remove-preferred-product': (d) => { const it = byId(store.state.purchasing.preferredProducts, d.id); if (!it) return; confirmDialog({ title: 'Remove this preferred product?', message: `Remove <strong>${esc(it.text)}</strong>?`, confirmLabel: 'Remove', onConfirm: () => { store.removePreferredProduct(d.id); afterDelete(); } }); },
+  'remove-store-preference': (d) => { const it = byId(store.state.purchasing.storePreferences, d.id); if (!it) return; confirmDialog({ title: 'Remove this store preference?', message: `Remove <strong>${esc(it.text)}</strong>?`, confirmLabel: 'Remove', onConfirm: () => { store.removeStorePreference(d.id); afterDelete(); } }); },
   'open-notif': (d) => store.setRead(d.id, true),
   'toggle-read': (d) => { const n = byId(store.state.notifications, d.id); store.setRead(d.id, !n.read); },
   'read-all': () => store.markAllRead(),
@@ -517,8 +739,8 @@ const actions = {
     const blob = new Blob([store.exportAnalytics()], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'roomsync-test-events.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   },
-  'replay-tour': () => launchTour(true),
-  reset: () => confirmDialog({ title: store.state.mode === 'demo' ? 'Reset the demo?' : 'Delete all data?', message: 'This permanently removes this household’s data from this browser.', confirmLabel: 'Delete everything', onConfirm: () => { resetTourSeen(storage); store.reset(); ui.welcome = null; location.hash = '#/home'; } }),
+  'replay-tour': () => { resetCoachmarks(storage); toast('Getting-started tips will show again as you visit each tab.'); },
+  reset: () => confirmDialog({ title: store.state.mode === 'demo' ? 'Reset the demo?' : 'Delete all data?', message: 'This permanently removes this household’s data from this browser.', confirmLabel: 'Delete everything', onConfirm: () => { resetCoachmarks(storage); store.reset(); ui.welcome = null; location.hash = '#/home'; } }),
   'retry-load': () => { store.reset(); render(); },
 };
 document.addEventListener('click', (e) => {
@@ -536,6 +758,7 @@ document.addEventListener('change', (e) => {
   else if (k === 'chore-form') syncChoreForm(el.form);
   else if (k === 'purchase-form') { const on = el.value !== 'none'; $('#expense-fields', el.form).hidden = !on; $('#no-expense-hint', el.form).hidden = on; $('[data-submit]', el.form).textContent = on ? 'Save purchase and expense' : 'Mark purchased'; }
   else if (k === 'pref') { const f = el.form; store.setPrefs({ reminders: f.elements.reminders.checked, leadDays: Number(f.elements.leadDays.value), updates: f.elements.updates.checked }); toast('Preferences saved.'); }
+  else if (k === 'pref-channels') { const f = el.form; store.setPrefs({ channels: { inApp: true, push: f.elements.push.checked, sms: f.elements.sms.checked } }); toast('Notification channels saved.'); }
   else if (el.name === 'participantIds[]' && el.form) updateSplitPreview(el.form);
 });
 document.addEventListener('input', (e) => { if (e.target.hasAttribute?.('data-preview')) updateSplitPreview(e.target.form); });
@@ -543,8 +766,8 @@ document.addEventListener('toggle', (e) => { const k = e.target.dataset?.key; if
 document.addEventListener('submit', (e) => { const f = e.target; if (f.dataset.inline) { e.preventDefault(); handleInlineForm(f); } });
 
 // ---------- shell & render ----------
-const NAV = [['home', '#/home', 'Home', 'home', 'Home'], ['chores', '#/chores/mine', 'Chores', 'chores', 'Chores'], ['money', '#/money/expenses', 'Expenses & Shopping', 'money', 'Expenses & Shopping'], ['calendar', '#/calendar', 'Calendar', 'calendar', 'Calendar']];
-const TITLES = { home: 'Home', chores: 'Chores', money: 'Expenses & Shopping', calendar: 'Calendar', notifications: 'Notifications', settings: 'Settings' };
+const NAV = [['home', '#/home', 'Home', 'home', 'Home'], ['chores', '#/chores/mine', 'Chores', 'chores', 'Chores'], ['money', '#/money/expenses', 'Expenses & Shopping', 'money', 'Expenses & Shopping'], ['calendar', '#/calendar', 'Calendar', 'calendar', 'Calendar'], ['profile', '#/profile', 'Profile', 'user', 'Profile']];
+const TITLES = { home: 'Home', chores: 'Chores', money: 'Expenses & Shopping', calendar: 'Calendar', profile: 'Profile', notifications: 'Notifications', settings: 'Settings' };
 const ADD_ITEMS = [{ label: 'Chore', icon: 'chores', action: 'add-chore' }, { label: 'Expense', icon: 'money', action: 'add-expense' }, { label: 'Shopping item', icon: 'cart', action: 'add-item' }, { label: 'Event', icon: 'calendar', action: 'add-event' }];
 // Selector that identifies the focused control across re-renders: every data-* attribute, so e.g. the Friday date button
 // is found again instead of the first cal-pick button (Monday).
@@ -564,6 +787,7 @@ function render() {
     case 'chores': page = viewChores(['mine', 'all', 'done'].includes(sub) ? sub : 'mine'); break;
     case 'money': page = viewMoney(sub === 'shopping' ? 'shopping' : 'expenses'); break;
     case 'calendar': page = viewCalendar(); break;
+    case 'profile': page = viewProfile(); break;
     case 'notifications': page = viewNotifications(); break;
     case 'settings': page = viewSettings(); break;
     default: page = viewHome();
@@ -612,8 +836,19 @@ function afterRender(route, sig) {
   const target = sig && $(sig, app);
   if (target) target.focus({ preventScroll: true });
   else if (!app.contains(document.activeElement) && !$('#modal').open) $('#main')?.focus({ preventScroll: true });
+  maybeCoach(route);
 }
-window.addEventListener('hashchange', () => { ui.handled = null; render(); if (!parseRoute().query.id) { window.scrollTo(0, 0); $('#main')?.focus({ preventScroll: true }); } });
+// Per-tab onboarding: the first time a household member opens a tab, show its coachmark once (6.1/6.2),
+// tracking seen-state independently per tab (6.3). Storage failures are swallowed inside tour.js (6.6).
+const COACH_TABS = { home: 'home', chores: 'chores', money: 'money', calendar: 'calendar', profile: 'profile' };
+function maybeCoach(route) {
+  if (!store.state) return;
+  const tab = COACH_TABS[route.parts[0]] || 'home';
+  if (coachSeen(storage, tab)) return;
+  showCoachmark({ tab, storage, track: (name, props) => store.trackEvent(name, props), onEnd: () => render() });
+  markCoachSeen(storage, tab);
+}
+window.addEventListener('hashchange', () => { endCoachmark(); ui.handled = null; render(); if (!parseRoute().query.id) { window.scrollTo(0, 0); $('#main')?.focus({ preventScroll: true }); } });
 narrowMQ.addEventListener('change', () => { if (store.state) render(); });
 
 // ---------- start ----------

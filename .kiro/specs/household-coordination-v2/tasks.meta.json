@@ -1,0 +1,243 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "2. Add pure rotation helpers to `js/logic.js`": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845636889
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845643655
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845738929
+      }
+    ],
+    "3. Implement scheduled auto-rotation in the store": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845636946
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845741482
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845915295
+      }
+    ],
+    "4. Implement chore swaps in the store (state + functions)": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845636996
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845917967
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846109416
+      }
+    ],
+    "5. Implement shared household expectations in the store": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637043
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846115685
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846182800
+      }
+    ],
+    "6. Implement shared purchasing rules in the store": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637087
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846186009
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846288650
+      }
+    ],
+    "7. Implement local profile fields in the store": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637132
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846291862
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846371975
+      }
+    ],
+    "8. Rework onboarding into per-tab coachmarks in `js/tour.js`": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637175
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846374991
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846543743
+      }
+    ],
+    "9. Retire the upfront tour and wire coachmark triggering + replay in `js/app.js`": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637223
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846547023
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846770770
+      }
+    ],
+    "10. Build the auto-rotation + swaps UI": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637269
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792846774087
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847054800
+      }
+    ],
+    "11. Build the expectations + purchasing-rules UI": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637308
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847057652
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847265319
+      }
+    ],
+    "12. Build the profile UI and interim labeling": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637353
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847268371
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847411782
+      }
+    ],
+    "13. Add the inert notification-channel toggles (Phase 3 seam)": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637437
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847415030
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847498045
+      }
+    ],
+    "14. Seed demo fixtures for the new features": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637486
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847501257
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847828057
+      }
+    ],
+    "15. Full verification pass": [
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792845637535
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847831204
+      },
+      {
+        "executionId": "e44b7c2c-2a13-48f7-87fa-0eaf23e96c7e",
+        "chatSessionId": "sess_fe857e29-c26c-4fc3-9d54-8bd373e2e184",
+        "timestamp": 1792847969504
+      }
+    ]
+  }
+}

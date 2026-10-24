@@ -55,7 +55,7 @@ svg.i { flex: none; vertical-align: middle; }
 /* ---------- Shell ---------- */
 .shell { min-height: 100vh; }
 .sidebar { display: none; }
-.main-col { padding-bottom: calc(var(--nav-h) + var(--space-5) + env(safe-area-inset-bottom, 0px)); min-width: 0; background: var(--color-surface); }
+.main-col { padding-bottom: calc(var(--nav-h) * 2 + var(--space-3) + env(safe-area-inset-bottom, 0px)); min-width: 0; background: var(--color-surface); } /* nav wraps taller than --nav-h at narrow widths; reserve its real footprint */
 main { max-width: 800px; margin: 0 auto; padding: var(--space-4) var(--space-4) var(--space-6); outline: none; }
 main.wide { max-width: 1040px; }
 .topbar { position: sticky; top: 0; z-index: 20; background: var(--color-surface); border-bottom: 1px solid var(--color-border); display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4); min-height: 56px; }
@@ -419,6 +419,12 @@ details.inline > summary { min-height: 36px; }
 .bottomnav .menu.fab-wrap { position: relative; }
 
 /* ---------- guided tour ---------- */
+/* Per-tab coachmarks reuse this chrome but are non-blocking tips, not a modal:
+   the root/backdrop must not intercept pointer events so the tab underneath stays usable.
+   Only the card (and its buttons) receive clicks. (Design §7 "Coachmark presentation".) */
+.tour-root.tour-coach { pointer-events: none; }
+.tour-root.tour-coach .tour-backdrop { background: transparent; pointer-events: none; }
+.tour-root.tour-coach .tour-card { pointer-events: auto; }
 .tour-root { position: fixed; inset: 0; z-index: 1000; }
 .tour-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, .55); animation: tour-fade var(--dur) ease-out; }
 .tour-ring {

@@ -23,6 +23,9 @@ const switchTo = async (n) => { if (!(await page.locator('#switch-user').isVisib
 const toastGone = () => page.evaluate(() => document.querySelectorAll('#toasts .toast').forEach((t) => t.remove()));
 
 // 1. demo entry
+// Pre-seed per-tab coachmarks as seen so the non-blocking tip overlay doesn't sit over
+// controls during feature flows (onboarding itself is covered by coachmarks.test.mjs).
+await page.addInitScript(() => { try { localStorage.setItem('roomsync.coach.v1', JSON.stringify({ home: true, chores: true, money: true, calendar: true, profile: true })); } catch (e) {} });
 await page.goto(BASE);
 await page.getByRole('button', { name: /Try the demo/ }).click();
 await page.getByRole('heading', { name: 'Today', level: 1 }).waitFor();
@@ -159,7 +162,9 @@ await page.getByRole('button', { name: 'More actions for Take out trash & recycl
 await page.keyboard.press('Enter');
 await page.getByRole('menuitem', { name: 'Edit chore' }).waitFor();
 await page.keyboard.press('ArrowDown');
-assert.equal(await st(() => document.activeElement.textContent.trim()), 'Delete chore');
+// v2 added swap items to an owned chore's menu (Edit -> Ask someone to take this -> Offer a trade -> Delete),
+// so one ArrowDown from Edit now lands on the first swap item.
+assert.equal(await st(() => document.activeElement.textContent.trim()), 'Ask someone to take this');
 await page.keyboard.press('Escape');
 assert.equal(await st(() => document.activeElement.getAttribute('aria-label')), 'More actions for Take out trash & recycling');
 // dialog: Escape closes and focus returns to opener
