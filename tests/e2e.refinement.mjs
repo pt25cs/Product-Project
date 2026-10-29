@@ -38,19 +38,39 @@ const noOverflow = async (page, label) => { const o = await page.evaluate(() => 
   });
   await page.reload(); await page.getByRole('heading', { name: 'Today', level: 1 }).waitFor();
 
-  // A. Home labels, previews, collapsed activity, reading order
+  // A. Home dropdowns: purple summaries, chores expanded by default, the rest collapsed, reading order
+  // The linking sections are now collapsible disclosures (Chores / Expenses / Household plans / Shopping list).
+  await page.locator('details[data-key=chores] > summary').waitFor();
+  await page.locator('details[data-key=expenses] > summary').waitFor();
+  await page.locator('details[data-key=plans] > summary').waitFor();
+  await page.locator('details[data-key=shopping] > summary').waitFor();
+  // Chores opens by default so the primary content stays visible; the other link dropdowns start closed.
+  assert.equal(await page.locator('details[data-key=chores]').evaluate((d) => d.open), true, 'chores expanded by default');
+  for (const key of ['expenses', 'plans', 'shopping', 'activity']) {
+    assert.equal(await page.locator(`details[data-key=${key}]`).evaluate((d) => d.open), false, `${key} collapsed by default`);
+  }
+  // Inside the (open) chores dropdown: the sub-sections and their single preview link.
   await page.getByRole('heading', { level: 2, name: /^Your upcoming chores/ }).waitFor();
-  await page.getByRole('heading', { level: 2, name: /^Household plans/ }).waitFor();
   await page.getByRole('heading', { level: 2, name: /^Past due in the household/ }).waitFor();
   assert.equal(await page.getByRole('heading', { level: 2, name: /^(Upcoming|Coming up)/ }).count(), 0, 'ambiguous headings removed');
   assert.ok((await page.locator('#h-up').locator('xpath=ancestor::section//li.row').count()) <= 3, 'upcoming preview limited');
   await page.getByRole('link', { name: 'See all your chores' }).waitFor();
-  await page.getByText(/\+ \d+ more needed/).waitFor();
-  assert.equal(await page.getByRole('link', { name: /See calendar|See the full list/ }).count(), 0, 'one link per preview');
-  assert.equal(await page.locator('details[data-key=activity]').evaluate((d) => d.open), false, 'activity collapsed by default');
+  // Purple summary header uses the primary brand color.
+  const summaryBg = await page.locator('details[data-key=chores] > summary').evaluate((s) => getComputedStyle(s).backgroundColor);
+  assert.equal(summaryBg, 'rgb(79, 70, 229)', 'dropdown summary is purple (brand primary)');
   const y = async (sel) => (await page.locator(sel).first().boundingBox()).y;
-  const order = [await y('#h-today'), await y('#h-others'), await y('text=Your balance'), await y('#h-ev'), await y('#h-shop'), await y('details[data-key=activity] > summary')];
-  assert.deepEqual([...order].sort((a, b) => a - b), order, 'mobile reading order: chores → household past due → balance → plans → shopping → activity');
+  const order = [
+    await y('details[data-key=chores] > summary'),
+    await y('#h-others'),
+    await y('details[data-key=expenses] > summary'),
+    await y('details[data-key=plans] > summary'),
+    await y('details[data-key=shopping] > summary'),
+    await y('details[data-key=activity] > summary'),
+  ];
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'mobile reading order: chores → household past due → expenses → plans → shopping → activity');
+  // Expanding a collapsed dropdown reveals its neutral (non-purple) content.
+  await page.locator('details[data-key=shopping] > summary').click();
+  await page.getByText(/\+ \d+ more needed/).waitFor();
   await page.locator('details[data-key=activity] > summary').click();
   await page.locator('details[data-key=activity] .feed li').first().waitFor();
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -194,7 +214,9 @@ for (const w of [390, 360]) {
   await page.getByRole('heading', { level: 2, name: /^Your chores/ }).waitFor();
   const first = await page.getByRole('checkbox', { name: /^Complete:/ }).first().boundingBox();
   console.log(`  first chore top at ${Math.round(first.y)}px (${w}px wide)`);
-  assert.ok(first.y < 235, `first chore should start higher (was ~260): ${first.y}`);
+  // The Chores dropdown summary bar sits above the chores (it defaults open), so the first chore
+  // starts a little lower than when the section was a plain heading — still well on the first screen.
+  assert.ok(first.y < 300, `first chore should start high on the page: ${first.y}`);
   await shot(`home-mobile-${w}`);
   // overdue + empty states keep honest headings
   await page.evaluate(() => { const s = window.__roomsync; s.state.occurrences.filter((o) => !o.doneAt && o.assigneeId === s.me()).forEach((o) => s.deleteChore(o.id)); });

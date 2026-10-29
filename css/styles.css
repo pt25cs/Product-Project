@@ -258,11 +258,21 @@ th, td { text-align: left; padding: 10px 6px; border-top: 1px solid var(--color-
 thead th { color: var(--color-text-secondary); font-weight: 600; font-size: .8125rem; border-top: 0; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody th { color: var(--color-text); font-weight: 500; }
-details.disclosure > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 44px; cursor: pointer; font-weight: 650; color: var(--color-text); font-size: .9375rem; border-bottom: 1px solid var(--color-border); }
+/* Home dropdowns: purple summary header, with the expanded body kept neutral (black/white/grey). */
+details.disclosure > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 44px; padding: 8px var(--space-3); cursor: pointer; font-weight: 650; font-size: .9375rem; color: var(--color-on-primary); background: var(--color-primary); border: 1px solid var(--color-primary); border-radius: var(--radius-control); transition: background var(--dur); }
+details.disclosure[open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+details.disclosure > summary:hover { background: var(--color-primary-hover); }
+details.disclosure > summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
 details.disclosure > summary::-webkit-details-marker { display: none; }
-details.disclosure > summary .chev { color: var(--color-text-secondary); transition: transform var(--dur); display: inline-flex; }
+details.disclosure > summary .disc-title { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+details.disclosure > summary .disc-end { display: inline-flex; align-items: center; gap: var(--space-3); flex: none; }
+details.disclosure > summary .disc-title .count { background: rgba(255, 255, 255, .22); color: var(--color-on-primary); font-weight: 600; font-size: .75rem; padding: 1px 8px; border-radius: 999px; }
+details.disclosure > summary .disc-end a { color: var(--color-on-primary); text-decoration: underline; font-weight: 600; font-size: .8125rem; }
+details.disclosure > summary .disc-end a:hover { text-decoration: none; }
+details.disclosure > summary .chev { color: var(--color-on-primary); transition: transform var(--dur); display: inline-flex; }
 details.disclosure[open] > summary .chev { transform: rotate(180deg); }
-details.disclosure > .disc-body { padding-top: var(--space-3); }
+details.disclosure > .disc-body { padding: var(--space-3); border: 1px solid var(--color-border); border-top: 0; border-bottom-left-radius: var(--radius-control); border-bottom-right-radius: var(--radius-control); background: var(--color-surface); color: var(--color-text); }
+details.disclosure > .disc-body > .sec:first-child, details.disclosure > .disc-body > .sec:first-of-type { margin-top: 0; }
 details.inline > summary { cursor: pointer; font-size: .8125rem; font-weight: 600; color: var(--color-primary); list-style: none; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; }
 details.inline > summary::-webkit-details-marker { display: none; }
 details.inline ul { margin: 4px 0 0; padding-left: 18px; font-size: .8125rem; color: var(--color-text-secondary); }

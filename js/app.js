@@ -12,7 +12,8 @@ try { storage = window.localStorage; storage.getItem('roomsync.probe'); } catch 
 const store = createStore({ storage });
 const app = $('#app');
 
-const ui = { statsWeek: null, calSel: null, calView: null, open: {}, welcome: null, handled: null, focusAfter: null };
+// Home dropdowns default: chores expanded (primary content), the rest collapsed to keep the home calm.
+const ui = { statsWeek: null, calSel: null, calView: null, open: { chores: true }, welcome: null, handled: null, focusAfter: null };
 let loadError = null;
 const narrowMQ = window.matchMedia('(max-width: 859px)');
 const narrow = () => narrowMQ.matches;
@@ -26,7 +27,7 @@ const avatar = (id) => `<span class="avatar" aria-hidden="true">${esc((name(id) 
 const empty = (title, text, action = '') => `<div class="empty"><strong>${esc(title)}</strong>${esc(text)}${action}</div>`;
 const sec = (id, title, body, { count, danger, icon, right = '' } = {}) => `<section class="sec" aria-labelledby="h-${id}"><div class="sec-head"><h2 id="h-${id}" class="${danger ? 'danger' : ''}">${icon ? ic(icon, 15) : ''}${esc(title)}${count != null ? `<span class="count">${count}</span>` : ''}</h2>${right}</div>${body}</section>`;
 const addRow = (action, label, extra = '') => `<button type="button" class="add-row" data-action="${action}" ${extra}><span class="plus">${ic('plus', 18)}</span>${esc(label)}</button>`;
-const disclosure = (key, title, body) => `<details class="disclosure sec" data-key="${key}"${ui.open[key] ? ' open' : ''}><summary><span>${title}</span><span class="chev">${ic('chevron', 18)}</span></summary><div class="disc-body">${body}</div></details>`;
+const disclosure = (key, title, body, { count, right = '' } = {}) => `<details class="disclosure sec" data-key="${key}"${ui.open[key] ? ' open' : ''}><summary><span class="disc-title">${title}${count != null ? `<span class="count">${count}</span>` : ''}</span><span class="disc-end">${right}<span class="chev">${ic('chevron', 18)}</span></span></summary><div class="disc-body">${body}</div></details>`;
 function ago(iso) {
   const d = new Date(iso), mins = (Date.now() - d.getTime()) / 60000;
   if (mins < 1) return 'Just now';
@@ -176,14 +177,16 @@ function viewHome() {
   const list = (arr) => `<ul class="list">${arr.map((o) => choreRow(o, { ctx: 'h' })).join('')}</ul>`;
   const todayBody = dueToday.length ? list(dueToday)
     : `<div class="empty"><strong>${ic('check', 16)} You’re all caught up today</strong>${upcomingAll.length ? `Next up: ${esc(upcomingAll[0].title)}, ${L.fmtDay(upcomingAll[0].due)}.` : 'Nothing is assigned to you right now.'}</div>`;
+  // Chores preview, grouped into one collapsible dropdown (Your chores + upcoming) that links to the full Chores section.
+  const choresBody = `${sec('today', 'Your chores', todayBody + addRow('add-chore', 'Add chore'), { count: dueToday.length || null })}
+      ${upcomingAll.length ? sec('up', 'Your upcoming chores', list(upcoming) + moreLink(upcomingAll.length, upcoming.length, '#/chores/mine', 'See all your chores'), { count: upcomingAll.length }) : ''}`;
   const mainCol = `<div data-o="1">${overdueMine.length ? sec('over', 'Overdue', list(overdueMine), { count: overdueMine.length, danger: true, icon: 'alert' }) : ''}
-      ${sec('today', 'Your chores', todayBody + addRow('add-chore', 'Add chore'), { count: dueToday.length || null })}
-      ${upcomingAll.length ? sec('up', 'Your upcoming chores', list(upcoming) + moreLink(upcomingAll.length, upcoming.length, '#/chores/mine', 'See all your chores'), { count: upcomingAll.length }) : ''}</div>
+      ${disclosure('chores', 'Chores', choresBody, { count: dueToday.length || null, right: '<a href="#/chores">Open chores</a>' })}</div>
     ${others.length ? `<div data-o="2">${sec('others', 'Past due in the household', `<ul class="list">${others.slice(0, PREVIEW).map((o) => choreRow(o, { ctx: 'o', owner: true })).join('')}</ul>${moreLink(others.length, PREVIEW, '#/chores/all', 'See all chores')}`, { count: others.length })}</div>` : ''}
     <div data-o="6">${disclosure('activity', 'Recent activity', feed.length ? `<ul class="feed">${feed.map((a) => `<li><a href="${esc(a.link)}"><strong>${esc(who(a.actorId))}</strong> ${esc(L.displayCopy(a.verb))} ${esc(L.displayCopy(a.subject))}</a><time datetime="${a.ts}">${ago(a.ts)}</time></li>`).join('')}</ul>` : empty('No activity yet', 'Completed chores, purchases and changes show up here.'))}</div>`;
-  const sideCol = `<div data-o="3" class="sec"><div class="panel-soft"><div class="sec-head" style="border:0;padding:0 0 8px"><h2>Your balance</h2><a href="#/money/expenses">Expenses</a></div>${balanceBlock()}</div></div>
-    <div data-o="4">${sec('ev', 'Household plans', events.length ? `<ul class="list">${events.slice(0, PREVIEW).map(eventRow).join('')}</ul>${moreText(events.length, PREVIEW, 'in the next 14 days')}` : empty('Nothing planned', 'Add quiet time, guests or plans so everyone knows.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>'), { count: events.length || null, right: '<a href="#/calendar">Calendar</a>' })}</div>
-    <div data-o="5">${sec('shop', 'Shopping list', needed.length ? `<ul class="list">${needed.slice(0, PREVIEW).map(shopRowCompact).join('')}</ul>${moreText(needed.length, PREVIEW, 'needed')}` : empty('Nothing needed', 'Add something when the apartment runs low.', '<br><button type="button" class="btn sm" data-action="add-item">Add item</button>'), { count: needed.length || null, right: '<a href="#/money/shopping">Open list</a>' })}</div>`;
+  const sideCol = `<div data-o="3">${disclosure('expenses', 'Expenses', balanceBlock(), { right: '<a href="#/money/expenses">Open expenses</a>' })}</div>
+    <div data-o="4">${disclosure('plans', 'Household plans', events.length ? `<ul class="list">${events.slice(0, PREVIEW).map(eventRow).join('')}</ul>${moreText(events.length, PREVIEW, 'in the next 14 days')}` : empty('Nothing planned', 'Add quiet time, guests or plans so everyone knows.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>'), { count: events.length || null, right: '<a href="#/calendar">Calendar</a>' })}</div>
+    <div data-o="5">${disclosure('shopping', 'Shopping list', needed.length ? `<ul class="list">${needed.slice(0, PREVIEW).map(shopRowCompact).join('')}</ul>${moreText(needed.length, PREVIEW, 'needed')}` : empty('Nothing needed', 'Add something when the apartment runs low.', '<br><button type="button" class="btn sm" data-action="add-item">Add item</button>'), { count: needed.length || null, right: '<a href="#/money/shopping">Open list</a>' })}</div>`;
   return `<div class="page-head"><div><h1>Today</h1><p class="sub">${greet}, ${esc(name(me))} · ${L.fmtDay(t)}</p></div></div><div class="dash"><div class="dash-col">${mainCol}</div><div class="dash-col">${sideCol}</div></div>`;
 }
 
@@ -763,6 +766,16 @@ document.addEventListener('change', (e) => {
 });
 document.addEventListener('input', (e) => { if (e.target.hasAttribute?.('data-preview')) updateSplitPreview(e.target.form); });
 document.addEventListener('toggle', (e) => { const k = e.target.dataset?.key; if (k) ui.open[k] = e.target.open; }, true);
+// A link in a disclosure summary should navigate without toggling the dropdown open/closed.
+// Native <details> toggles when the summary is clicked; preventDefault cancels that toggle,
+// so we navigate manually via the link's hash to keep the dropdown state unchanged.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('summary a[href]');
+  if (!a) return;
+  e.preventDefault();
+  const href = a.getAttribute('href');
+  if (href && href[0] === '#') location.hash = href.slice(1);
+}, false);
 document.addEventListener('submit', (e) => { const f = e.target; if (f.dataset.inline) { e.preventDefault(); handleInlineForm(f); } });
 
 // ---------- shell & render ----------

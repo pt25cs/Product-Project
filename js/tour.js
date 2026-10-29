@@ -56,19 +56,49 @@ const COACHMARKS = {
     body: 'Your due chores, balance, upcoming plans and the shopping preview live here. The tabs below (or the sidebar on a computer) open the full sections.',
   },
   chores: {
-    find: firstVisible('.add-row[data-action="add-chore"]', '[data-action="add-chore"]', 'main'),
-    title: 'Chores and whose turn it is',
-    body: 'Check off what you did and see who’s next. “Add chore” sets who’s responsible, a due date, and weekly rotation — turn on “Advance automatically” so turns rotate on schedule. Need a hand? Use a chore’s menu to ask someone to take it or offer a trade.',
+    // Multi-step: the basics, then what the three-dots (kebab) menu on each chore row does.
+    steps: [
+      {
+        find: firstVisible('.add-row[data-action="add-chore"]', '[data-action="add-chore"]', 'main'),
+        title: 'Chores and whose turn it is',
+        body: 'Check off what you did and see who’s next. “Add chore” sets who’s responsible, a due date, and weekly rotation — turn on “Advance automatically” so turns rotate on schedule.',
+      },
+      {
+        find: firstVisible('.row .row-side .menu [data-menu-toggle]', '.list .menu [data-menu-toggle]', 'main'),
+        title: 'The three dots next to a chore',
+        body: 'Tap the three dots (⋯) beside any chore to open its menu. From there you can edit the chore, mark it done, reassign it to yourself, ask someone else to take it, offer a trade for one of their chores, or delete it.',
+      },
+    ],
   },
   money: {
-    find: firstVisible('.tabs'),
-    title: 'Expenses & Shopping together',
-    body: 'This tab holds both shared expenses (who paid, who owes) and the shopping list, switched via the two tabs at the top. Set shared purchasing rules — a monthly budget and preferred products/stores — and watch the budget line track this month’s spending (it never blocks a purchase).',
+    // Multi-step: the tab overview, then what the three-dots menu on each expense does.
+    steps: [
+      {
+        find: firstVisible('.tabs'),
+        title: 'Expenses & Shopping together',
+        body: 'This tab holds both shared expenses (who paid, who owes) and the shopping list, switched via the two tabs at the top. Set shared purchasing rules — a monthly budget and preferred products/stores — and watch the budget line track this month’s spending (it never blocks a purchase).',
+      },
+      {
+        find: firstVisible('.row .row-side .menu [data-menu-toggle]', '.list .menu [data-menu-toggle]', 'main'),
+        title: 'The three dots next to an expense',
+        body: 'Tap the three dots (⋯) beside any expense to open its menu. From there you can edit the expense to fix the amount, who paid, or how it’s split — or delete it if it was added by mistake.',
+      },
+    ],
   },
   calendar: {
-    find: firstVisible('[data-action="add-event"]', 'main'),
-    title: 'The shared calendar',
-    body: 'Quiet hours, guests, away days and plans live here. Use “Add event” to pick a type and set start/end dates and times.',
+    // Multi-step: the calendar overview, then the event categories you choose when adding one.
+    steps: [
+      {
+        find: firstVisible('[data-action="add-event"]', 'main'),
+        title: 'The shared calendar',
+        body: 'Quiet hours, guests, away days and plans live here. Use “Add event” to set a start/end date and time so everyone stays in the loop.',
+      },
+      {
+        find: firstVisible('[data-action="add-event"]', 'main'),
+        title: 'Pick a category for each event',
+        body: 'When you add an event, you choose its type: Quiet / study for heads-down time, Away when you’re unavailable, Guests when someone’s coming over, or Household plans for shared plans. The category sets the icon and color so everyone can tell events apart at a glance.',
+      },
+    ],
   },
   profile: {
     find: firstVisible('.profile-head', 'main'),
@@ -90,6 +120,7 @@ export function showCoachmark({ tab, storage, track, onEnd } = {}) {
     coach: true,
     tab,
     content,
+    steps: coachSteps(content), // one-or-more lessons; single-step coachmarks become a 1-element array
     navigate: () => {},
     track: trackFn,
     storage,
@@ -104,22 +135,48 @@ export function showCoachmark({ tab, storage, track, onEnd } = {}) {
   return true;
 }
 
+// Normalize a coachmark into an ordered list of steps. A coachmark may either carry a `steps`
+// array (multi-step lesson) or the flat { title, body, find } shape (single step) — both resolve
+// to an array here so the render/navigation code only ever deals with steps.
+function coachSteps(content) {
+  if (Array.isArray(content.steps) && content.steps.length) {
+    // Each step may define its own `find`; fall back to the coachmark-level anchor when it doesn't.
+    return content.steps.map((s) => ({ find: s.find || content.find, title: s.title, body: s.body }));
+  }
+  return [{ find: content.find, title: content.title, body: content.body }];
+}
+
 function renderCoachmark() {
   if (!active || !active.coach) return;
   const { progress, title, text, back, next } = active.els;
-  const { content } = active;
-  progress.textContent = '';
-  title.textContent = content.title;
-  text.textContent = content.body;
-  back.hidden = true;
-  next.textContent = 'Got it';
-  // Single step: resolve the anchor with a few retries (covers async re-render), center-fallback otherwise.
-  resolveCoachAnchor(content, 6);
+  const steps = active.steps;
+  const i = active.i;
+  const step = steps[i];
+  const multi = steps.length > 1;
+  progress.textContent = multi ? `Step ${i + 1} of ${steps.length}` : '';
+  title.textContent = step.title;
+  text.textContent = step.body;
+  // Back is available from the second step onward; the last (or only) step closes with "Got it".
+  back.hidden = i === 0;
+  next.textContent = i >= steps.length - 1 ? 'Got it' : 'Next';
+  // Resolve the step's anchor with a few retries (covers async re-render), center-fallback otherwise.
+  resolveCoachAnchor(step, 6);
 }
 
-function resolveCoachAnchor(content, triesLeft) {
-  if (!active || active.content !== content) return;
-  const el = content.find ? content.find() : null;
+// Advance/retreat through steps. Past the last step, "Next"/"Got it" ends the coachmark.
+function stepCoachmark(delta) {
+  if (!active || !active.coach) return;
+  const next = active.i + delta;
+  if (next < 0) return;
+  if (next >= active.steps.length) { endCoachmark({ completed: true }); return; }
+  active.i = next;
+  renderCoachmark();
+}
+
+function resolveCoachAnchor(step, triesLeft) {
+  // Bail if the coachmark ended or the user navigated to a different step mid-retry.
+  if (!active || active.steps[active.i] !== step) return;
+  const el = step.find ? step.find() : null;
   if (el || triesLeft <= 0) {
     active._lastEl = el || null;
     position(el || null, el ? 'auto' : 'center');
@@ -128,7 +185,7 @@ function resolveCoachAnchor(content, triesLeft) {
     // dismissable via its buttons or Escape; grabbing focus here would disrupt a user mid-task.
     return;
   }
-  setTimeout(() => resolveCoachAnchor(content, triesLeft - 1), 90);
+  setTimeout(() => resolveCoachAnchor(step, triesLeft - 1), 90);
 }
 
 // ---------- engine ----------
@@ -168,7 +225,8 @@ function buildChrome() {
   const pick = (n) => root.querySelector(`[data-tour="${n}"]`);
   const els = { root, backdrop: pick('backdrop'), ring: pick('ring'), card: pick('card'), progress: pick('progress'), title: pick('title'), text: pick('text'), skip: pick('skip'), back: pick('back'), next: pick('next') };
   els.skip.addEventListener('click', () => endCoachmark({ completed: false }));
-  els.next.addEventListener('click', () => endCoachmark({ completed: true }));
+  els.back.addEventListener('click', () => stepCoachmark(-1));
+  els.next.addEventListener('click', () => stepCoachmark(1));
   // Clicking the dimmed backdrop does nothing destructive (prevents accidental dismissal); Skip is explicit.
   els.backdrop.addEventListener('click', (e) => e.stopPropagation());
   return els;

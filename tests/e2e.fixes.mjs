@@ -49,8 +49,10 @@ for (const w of [360, 390]) {
     assert.ok(result.fab.inside && result.fab.w >= 44 && result.fab.h >= 44, `Add button docked in the bar and ≥44px (${JSON.stringify(result.fab)})`);
     assert.ok(result.clearance >= 0, `last content clears the bar at ${w}px #/${r}`);
   }
-  // Home: Record repayment and Add are both visible and independently tappable
+  // Home: Record repayment and Add are both visible and independently tappable.
+  // The balance (with Record repayment) now lives inside the collapsible Expenses dropdown, so open it first.
   await page.goto(`${BASE}#/home`);
+  await page.locator('details[data-key=expenses] > summary').click();
   const rr = page.getByRole('button', { name: 'Record repayment' }).first();
   await rr.scrollIntoViewIfNeeded();
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Record repayment')); const r = b.getBoundingClientRect(); window.scrollBy(0, r.top - (window.innerHeight - 220)); });
