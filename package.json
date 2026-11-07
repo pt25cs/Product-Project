@@ -1,11 +1,20 @@
 {
   "name": "kasa",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Kasa MVP: static, dependency-free roommate coordination app",
+  "description": "Kasa: roommate coordination app. Local demo runs with no backend; authenticated households use a Supabase backend (Phase 2).",
   "scripts": {
-    "start": "node serve.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "start": "node web/serve.mjs",
+    "test": "node --test web/tests/*.test.mjs",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:push": "supabase db push",
+    "db:diff": "supabase db diff",
+    "functions:serve": "supabase functions serve"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.119.0"
   }
 }

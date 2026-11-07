@@ -1,6 +1,6 @@
 {
   "buildCommand": null,
-  "outputDirectory": ".",
+  "outputDirectory": "web",
   "cleanUrls": true,
   "headers": [
     {

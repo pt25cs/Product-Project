@@ -15,7 +15,7 @@ user-visible, and unblocks everything else without depending on the backend.
 
 ---
 
-- [ ] 1. Rename user-facing product strings to "Kasa"
+- [x] 1. Rename user-facing product strings to "Kasa"
   - Update `index.html` (`<title>`, boot text, `noscript`), `js/app.js` (visible copy incl.
     "Kasa doesn't move money" / "Paid outside Kasa" / "No money was moved by Kasa"),
     `serve.mjs` startup log, and docs (`README.md`, `docs/master-plan.md`, `docs/roadmap.md`).
@@ -26,7 +26,7 @@ user-visible, and unblocks everything else without depending on the backend.
     (`tests/e2e.demo.mjs`); leave `window.__roomsync` references untouched; full suite green
     (10.4).
 
-- [ ] 2. Restructure the repo for client + backend
+- [x] 2. Restructure the repo for client + backend
   - Move the static app under `web/` (`index.html`, `css/`, `js/`, `tests/`, `serve.mjs`);
     update `vercel.json` `outputDirectory` to `web`. Add `supabase/` (`config.toml`,
     `migrations/`, `functions/`, `seed.sql`). Add `.env.example` (placeholders) and git-ignore
