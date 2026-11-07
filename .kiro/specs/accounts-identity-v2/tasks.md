@@ -98,7 +98,7 @@ user-visible, and unblocks everything else without depending on the backend.
   - _Test:_ create → first member; accept invite → new membership; claim placeholder → bound to
     user; size limit rejected server-side.
 
-- [ ] 10. Local-to-account migration (`migrate-import` edge function + client flow)
+- [x] 10. Local-to-account migration (`migrate-import` edge function + client flow)
   - Detect `roomsync.v1` on first authenticated load; offer import. Client reads + `normalize()`s
     local state and POSTs it; the edge function transactionally creates the household +
     memberships (signing-in user `claimed`, others placeholders) + all content + the user's

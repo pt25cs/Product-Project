@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const sqlPath = join(here, 'rls_policies.sql');
+const sqlFiles = ['rls_policies.sql', 'import_rpc.sql'];
 
 // Resolve a docker binary even when it isn't on PATH (per-user Docker Desktop installs).
 function findDocker() {
@@ -47,26 +47,24 @@ if (!container) {
   console.error('No running Supabase DB container found. Run `supabase start` first.');
   process.exit(1);
 }
-if (!existsSync(sqlPath)) {
-  console.error('Missing test file:', sqlPath);
-  process.exit(1);
+
+let totalPasses = 0;
+for (const file of sqlFiles) {
+  const sqlPath = join(here, file);
+  if (!existsSync(sqlPath)) { console.error('Missing test file:', sqlPath); process.exit(1); }
+  console.log(`Running ${file} against ${container} ...`);
+  const res = spawnSync(
+    docker,
+    ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
+    { input: readFileSync(sqlPath), encoding: 'utf8' }
+  );
+  const out = (res.stdout || '') + (res.stderr || '');
+  process.stdout.write(out);
+  const passes = (out.match(/PASS /g) || []).length;
+  if (/FAIL /.test(out) || res.status !== 0) {
+    console.error(`\nDB TESTS FAILED in ${file} (${passes} passed before failure).`);
+    process.exit(1);
+  }
+  totalPasses += passes;
 }
-
-console.log(`Running RLS policy tests against ${container} ...`);
-const res = spawnSync(
-  docker,
-  ['exec', '-i', container, 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1'],
-  { input: readFileSync(sqlPath), encoding: 'utf8' }
-);
-
-const out = (res.stdout || '') + (res.stderr || '');
-process.stdout.write(out);
-
-const passes = (out.match(/PASS /g) || []).length;
-const failed = /FAIL /.test(out) || res.status !== 0;
-
-if (failed) {
-  console.error(`\nRLS TESTS FAILED (${passes} passed before failure).`);
-  process.exit(1);
-}
-console.log(`\nAll ${passes} RLS policy tests passed.`);
+console.log(`\nAll ${totalPasses} database (RLS + import) tests passed.`);
