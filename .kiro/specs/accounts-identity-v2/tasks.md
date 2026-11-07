@@ -91,7 +91,7 @@ user-visible, and unblocks everything else without depending on the backend.
   - _Test (mocked auth):_ unauthenticated shows sign-in and no household data; authenticated
     shows app without "Viewing as"; demo still shows it.
 
-- [ ] 9. Household create / join / invitations
+- [x] 9. Household create / join / invitations
   - Create household (first membership), generate invitations (code/link), accept invitation to
     join as a new member or claim a migration placeholder; enforce 2–5 size server-side.
   - _Requirements: 7.1–7.5._
