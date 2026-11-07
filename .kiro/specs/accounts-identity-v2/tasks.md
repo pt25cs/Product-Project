@@ -73,14 +73,21 @@ user-visible, and unblocks everything else without depending on the backend.
   - _Test (mocked backend):_ owner edit persists + reloads identically; invalid budget/length
     rejected; non-owner write denied; write failure surfaced (no silent drop).
 
-- [ ] 7. Phone verification (Twilio Verify)
+- [x] 7. Phone verification (Twilio Verify) — CODE COMPLETE; live SMS check DEFERRED
   - Edge function(s) + `auth.js` methods: `startPhoneVerify(e164)` (send code),
     `confirmPhoneVerify(code)` (verify → set `profiles.phone_verified`). Handle wrong/expired
     code, rate limiting, and already-verified-elsewhere collision. Store number + verified flag
     server-side only.
   - _Requirements: 2.1–2.7, 6.4._
   - _Test (fake Twilio):_ correct code verifies; wrong/expired rejected; rate limit surfaced;
-    collision handled; client never holds the Twilio token.
+    collision handled; client never holds the Twilio token. **Done: 8/8 passing.**
+  - **DEFERRED (live):** Twilio gates Verify Service creation behind a paid-account upgrade, so
+    the one live SMS demonstration is deferred pending an SMS provider with billing enabled. This
+    is acceptable because R2.7 makes phone verification non-blocking in Phase 2 (unverified phones
+    can still use the app); the hard dependency is Phase 3 SMS delivery. To activate later: create
+    a Verify Service (or swap the provider behind the `twilio` adapter), set
+    `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` as Supabase edge
+    secrets, and run the manual check. No code changes required.
 
 - [ ] 8. Sign-in shell, sign-out, and retire "Viewing as"
   - `app.js`: top-level gate renders the sign-in screen ("Continue with Google") when
