@@ -31,6 +31,7 @@ export function createStore({ storage, now = () => new Date(), backend = null } 
   let undoSlot = null;
   let saveError = null;
   let storageBroken = false;
+  let pendingProfileWrite = null; // set to a userId when the next save() is a profile edit (Task 6)
   const subs = new Set();
 
   const today = () => L.toDateStr(now());
@@ -90,8 +91,10 @@ export function createStore({ storage, now = () => new Date(), backend = null } 
   function save() {
     if (backend) {
       const snapshot = JSON.parse(JSON.stringify(state));
+      const profileWriteFor = pendingProfileWrite; // single persistence call; no racing promises
+      pendingProfileWrite = null;
       Promise.resolve()
-        .then(() => backend.saveHousehold(snapshot))
+        .then(() => backend.saveHousehold(snapshot, { profileWriteFor }))
         .then(() => { if (saveError) { saveError = null; emit(); } })
         .catch((e) => { saveError = e; emit(); });
       return true;
@@ -746,8 +749,23 @@ export function createStore({ storage, now = () => new Date(), backend = null } 
     return mutate(() => {
       m.profile = { ...defaultProfile(), ...(m.profile || {}), ...next };
       logActivity('updated their profile', m.name, '#/profile');
+      // Authenticated path: the profile is persisted by the write-through in save() like every
+      // other mutation (Requirement 3.1); the backend adapter maps member.profile onto the
+      // owner's `profiles` row honoring owner-only RLS (R4.1/4.3). A write failure surfaces via
+      // saveError (R3.6). We mark this save as a profile write so the adapter can target the row.
+      pendingProfileWrite = backend ? me() : null;
       return { ok: true };
     });
+  }
+
+  /**
+   * Read any member's profile for display (Requirement 3.2 / 4). On the authenticated path other
+   * members are read-only in the UI and at the DB (owner-only writes, R4.1). This returns the
+   * in-memory profile the store already holds; the UI gates editing on `id === me()`.
+   */
+  function profileOf(id) {
+    const m = state.members.find((x) => x.id === id);
+    return m ? { ...defaultProfile(), ...(m.profile || {}) } : null;
   }
 
   // ---------- expenses ----------
@@ -1143,7 +1161,7 @@ export function createStore({ storage, now = () => new Date(), backend = null } 
     get isBackend() { return !!backend; },
     get state() { return state; }, get saveError() { return saveError; }, get storageBroken() { return storageBroken; },
     get undoLabel() { return undoSlot ? undoSlot.label : null; },
-    today, nowLocal, nameOf, me, memberIds, prefsOf, sel,
+    today, nowLocal, nameOf, me, memberIds, prefsOf, profileOf, sel,
     createHousehold, startDemo, setCurrentUser,
     addChore, editChore, reassignChore, completeChore, undoComplete, deleteChore,
     requestOpenSwap, cancelSwap, acceptOpenSwap, proposeDirectSwap, respondDirectSwap,

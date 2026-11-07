@@ -65,7 +65,7 @@ user-visible, and unblocks everything else without depending on the backend.
     consistent; failing backend sets `saveError` and does not report success; local/demo path
     (no backend) unchanged — existing `store.test.mjs` stays green.
 
-- [ ] 6. Server-backed profiles
+- [x] 6. Server-backed profiles
   - Route `updateProfile(patch)` to the `profiles` row for authenticated households, same field
     shape (`dietary`, `budgetCents`, `rules`) and validation (300-char caps, `parseMoney`).
     Load profile on sign-in; render other members' profiles read-only.
