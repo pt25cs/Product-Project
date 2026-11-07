@@ -100,11 +100,11 @@ step('5b. edit recalculates splits; delete restores balances exactly');
 
 // 6. repayment
 await page.getByRole('button', { name: 'Record repayment' }).first().click();
-await page.getByText('RoomSync doesn’t move money.').first().waitFor();
+await page.getByText('Kasa doesn’t move money.').first().waitFor();
 await page.getByLabel('Amount (USD)').fill('5');
 const bal0 = await st(() => window.__roomsync.sel.balances());
 await page.getByRole('button', { name: 'Record repayment' }).last().click();
-await page.getByText('Repayment recorded. No money was moved by RoomSync.').waitFor();
+await page.getByText('Repayment recorded. No money was moved by Kasa.').waitFor();
 const bal1 = await st(() => window.__roomsync.sel.balances());
 assert.equal(bal1[ids.Maya] - bal0[ids.Maya], 500);
 await shot('04-expenses-mobile');

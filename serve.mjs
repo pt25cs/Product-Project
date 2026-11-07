@@ -22,4 +22,4 @@ createServer(async (req, res) => {
     const data = await readFile(file);
     res.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' }).end(data);
   } catch { res.writeHead(404).end('Not found'); }
-}).listen(port, () => console.log(`RoomSync running at http://localhost:${port}`));
+}).listen(port, () => console.log(`Kasa running at http://localhost:${port}`));

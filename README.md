@@ -1,4 +1,4 @@
-# RoomSync (MVP prototype)
+# Kasa (MVP prototype)
 
 > Know what needs to happen, who’s responsible, and what’s already done—without chasing your roommates.
 

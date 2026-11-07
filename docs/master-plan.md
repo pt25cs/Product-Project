@@ -1,8 +1,8 @@
-# RoomSync Master Plan
+# Kasa Master Plan
 
 _Last updated: 2026-10-23_
 
-This document is the single source of truth for where RoomSync is going. It covers the
+This document is the single source of truth for where Kasa is going. It covers the
 product vision, the strategic pivot from B2C to B2B SaaS, the full feature set, and how
 the work is phased between what we can build on the current local-only architecture and
 what requires a backend.
@@ -17,11 +17,11 @@ Companion documents:
 
 ## 1. Vision
 
-RoomSync helps roommates run a shared home without chasing each other: chores, shared
+Kasa helps roommates run a shared home without chasing each other: chores, shared
 expenses, shopping, and plans in one place. Today it is a dependency-free, single-device
 web app with no accounts and no server.
 
-The next chapter expands RoomSync in two directions at once:
+The next chapter expands Kasa in two directions at once:
 
 1. **Deepen the coordination model** — move beyond "track chores and split money" into the
    softer problems that actually cause roommate friction: who does what and when (fairness),
@@ -29,12 +29,12 @@ The next chapter expands RoomSync in two directions at once:
    and shared purchasing decisions.
 2. **Change who we sell to** — reposition from a consumer tool roommates discover on their
    own (B2C) to a product sold to **apartment operators and property managers** (B2B SaaS),
-   where RoomSync is part of the unit and a lever for tenant satisfaction and renewals.
+   where Kasa is part of the unit and a lever for tenant satisfaction and renewals.
 
 ### The thesis behind the B2B pivot
 
 When tenants move in without pre-chosen roommates, a bad roommate dynamic often gets blamed
-on the apartment itself. That resentment shows up at renewal time. RoomSync reduces that
+on the apartment itself. That resentment shows up at renewal time. Kasa reduces that
 friction by giving roommates a low-conflict, structured way to keep each other accountable —
 rotating chores fairly, trading tasks without confrontation, and agreeing on shared rules up
 front. For an operator, happier roommate dynamics mean higher satisfaction and more
@@ -42,7 +42,7 @@ renewals, which is a budget line a property manager actually cares about.
 
 The product principle that follows from this: **a roommate should never need another app or
 service to coordinate the home.** Chores, money, shopping, plans, profiles, and household
-norms all live in RoomSync.
+norms all live in Kasa.
 
 ---
 
@@ -65,13 +65,13 @@ implement.
 
 ---
 
-## 3. Who RoomSync is for
+## 3. Who Kasa is for
 
 We are intentionally **not** shipping invented marketing personas. Instead we describe the
 real roles the product serves, because the B2B pivot introduces a buyer who never touches the
 day-to-day app.
 
-- **Roommate (primary end user).** Lives in the unit, uses RoomSync daily to see what they
+- **Roommate (primary end user).** Lives in the unit, uses Kasa daily to see what they
   owe, what chores are theirs, what the household needs, and what's planned. Wants low effort
   and low confrontation. Values being able to trade a chore or flag a conflict without a
   face-to-face negotiation.
@@ -79,7 +79,7 @@ day-to-day app.
   single person owns: the chore rotation, shared expectations, purchasing rules, the shopping
   list, and the expense ledger.
 - **Property manager / operator (the buyer, B2B phase).** Does not manage chores. Buys
-  RoomSync to raise tenant satisfaction and renewals, onboards units, and wants
+  Kasa to raise tenant satisfaction and renewals, onboards units, and wants
   portfolio-level signal that the product is being used. Never sees an individual roommate's
   private profile data.
 
@@ -137,7 +137,7 @@ spec's implementation tasks.
 1. **Authenticated user profiles** synced to a Gmail/email address and a phone number. This
    supersedes the local profile scaffolding and makes profiles portable across devices and
    roommates.
-2. **Push notifications and SMS/text delivery.** Once a phone number is on file, RoomSync can
+2. **Push notifications and SMS/text delivery.** Once a phone number is on file, Kasa can
    send texts about upcoming deadlines, swap requests, and conflicts — not just in-app
    notices. The notification _preferences_ model is designed now so delivery channels slot in
    later.
@@ -168,7 +168,7 @@ Phase 2 on is tracked in the roadmap and will get its own specs when we reach it
 
 - **No agentic chore scheduling.** Rotation and conflict resolution are deterministic
   algorithms, so behavior is predictable and testable.
-- **RoomSync never moves money.** Expenses, budgets, and purchasing rules are records and
+- **Kasa never moves money.** Expenses, budgets, and purchasing rules are records and
   guidance; repayments are logged, not transacted. Unchanged by this plan.
 - **Local profile fields are not private accounts yet.** Until Phase 2, profile data lives in
   shared local state and carries no real authentication or privacy guarantee. This is stated

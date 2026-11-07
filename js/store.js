@@ -1,4 +1,4 @@
-// RoomSync data layer. Framework-free; storage is injected so it runs in the browser (localStorage)
+// Kasa data layer. Framework-free; storage is injected so it runs in the browser (localStorage)
 // and in Node tests (in-memory). All data lives in ONE browser (no server) — see README.
 import * as L from './logic.js';
 
@@ -214,7 +214,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
     if (names.some((n) => n.length > 30)) errors.others = 'Names can be up to 30 characters.';
     else if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) errors.others = 'Each roommate needs a different name.';
     else if (names.length < 2) errors.others = 'Add at least one roommate.';
-    else if (names.length > 5) errors.others = 'RoomSync supports up to 5 roommates.';
+    else if (names.length > 5) errors.others = 'Kasa supports up to 5 roommates.';
     if (Object.keys(errors).length) return { ok: false, errors };
     state = blank('local', trimmed(householdName), names);
     const t = today();
@@ -755,7 +755,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       const r = { id: uid('r'), fromId: d.fromId, toId: d.toId, amountCents: cents, date: d.date, note: trimmed(d.note), createdBy: me(), createdAt: nowISO(), ...(d.token ? { token: d.token } : {}) };
       state.reimbursements.push(r);
       logActivity('recorded a repayment of', `${L.fmtMoney(cents)} from ${nameOf(r.fromId)} to ${nameOf(r.toId)}`, '#/money/expenses');
-      notify([r.fromId, r.toId], { type: 'expense', title: `${nameOf(me())} recorded a repayment: ${nameOf(r.fromId)} paid ${nameOf(r.toId)} ${L.fmtMoney(cents)}.`, body: 'Paid outside RoomSync.', link: '#/money/expenses' });
+      notify([r.fromId, r.toId], { type: 'expense', title: `${nameOf(me())} recorded a repayment: ${nameOf(r.fromId)} paid ${nameOf(r.toId)} ${L.fmtMoney(cents)}.`, body: 'Paid outside Kasa.', link: '#/money/expenses' });
       return { ok: true };
     });
   }
@@ -1035,7 +1035,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
 
     // Notifications for Maya (reminders are generated live)
     const nt = (userId, type, title, body, link, h, read = false) => state.notifications.push({ id: uid('n'), userId, type, title, body, link, key: null, read, createdAt: iso(-1, h) });
-    nt(maya, 'expense', 'Maya recorded a repayment: Maya paid Jordan $20.00.', 'Paid outside RoomSync.', '#/money/expenses', 18, true);
+    nt(maya, 'expense', 'Maya recorded a repayment: Maya paid Jordan $20.00.', 'Paid outside Kasa.', '#/money/expenses', 18, true);
     nt(maya, 'event', 'Priya added Quiet study block (midterm review).', `Quiet / study · ${L.fmtDay(at(1))}`, '#/calendar', 11);
     nt(maya, 'expense', 'Priya added Cleaning supplies (Target).', 'Your share: $6.86 of $27.43', '#/money/expenses', 10, true);
 

@@ -246,7 +246,7 @@ for (const w of [390, 360]) {
   await seeded.getByText('Recorded from a shopping list purchase').waitFor();
   await seeded.getByText(/Split 4 ways equally/).waitFor();
   assert.match(await seeded.innerText(), /Your share \$6\.86/, 'share stays visible');
-  assert.match(await page.locator('li.row', { hasText: 'You repaid Jordan' }).innerText(), /Paid outside RoomSync/);
+  assert.match(await page.locator('li.row', { hasText: 'You repaid Jordan' }).innerText(), /Paid outside Kasa/);
   await shot(`expenses-mobile-${w}`);
 
   // calendar: date outside the current week updates the compact anchor

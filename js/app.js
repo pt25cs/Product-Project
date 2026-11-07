@@ -126,7 +126,7 @@ function balanceBlock({ full = false } = {}) {
   const lines = mine.map((x) => x.from === me
     ? `<li><span>Pay ${esc(name(x.to))} <strong class="money">${money(x.cents)}</strong></span><button type="button" class="btn sm" data-action="add-reimb" data-from="${x.from}" data-to="${x.to}" data-cents="${x.cents}">Record repayment</button></li>`
     : `<li><span>${esc(name(x.from))} owes you <strong class="money">${money(x.cents)}</strong></span></li>`).join('');
-  return `${head}${lines ? `<ul class="pay-list">${lines}</ul>` : ''}<p class="hint">${full ? 'Record a payment you made outside RoomSync. RoomSync doesn’t move money.' : 'Based on recorded expenses and repayments.'}</p>`;
+  return `${head}${lines ? `<ul class="pay-list">${lines}</ul>` : ''}<p class="hint">${full ? 'Record a payment you made outside Kasa. Kasa doesn’t move money.' : 'Based on recorded expenses and repayments.'}</p>`;
 }
 function eventRow(ev) {
   return `<li class="row"><div class="row-lead"><span class="ag-ic cat-${ev.category}">${ic(CAT_ICON[ev.category], 14)}</span></div><div class="row-main"><div class="row-title"><button type="button" class="title-btn" data-action="view-event" data-id="${ev.id}">${esc(ev.title)}</button></div><div class="row-meta"><span>${esc(eventWhen(ev))}</span></div></div></li>`;
@@ -153,7 +153,7 @@ function shoppingHint() {
   if (sp.length) bits.push(`Stores: ${sp.slice(0, 3).map(esc).join(', ')}${sp.length > 3 ? ` +${sp.length - 3} more` : ''}`);
   if (b.set) bits.push(b.over ? `Over the shared budget by ${money(-b.remainingCents)}` : `${money(b.remainingCents)} left in the shared budget`);
   if (!bits.length) return '';
-  return `<div class="panel-soft" style="margin-bottom:12px"><p class="small"><strong>${ic('info', 14)}Purchasing rules</strong> ${bits.join(' · ')}</p><p class="hint" style="margin-top:4px">Guidance only — RoomSync never blocks a purchase. Manage these in <a href="#/settings">Settings</a>.</p></div>`;
+  return `<div class="panel-soft" style="margin-bottom:12px"><p class="small"><strong>${ic('info', 14)}Purchasing rules</strong> ${bits.join(' · ')}</p><p class="hint" style="margin-top:4px">Guidance only — Kasa never blocks a purchase. Manage these in <a href="#/settings">Settings</a>.</p></div>`;
 }
 function shopRowCompact(i) {
   return `<li class="row"><div class="row-main"><div class="row-title">${esc(i.name)} <span class="muted" style="font-weight:400">× ${esc(i.qty)}</span></div><div class="row-meta"><span>${i.buyerId ? `${esc(who(i.buyerId))} claimed` : 'Unclaimed'}</span></div></div></li>`;
@@ -272,7 +272,7 @@ function viewMoney(tab) {
       <details class="inline" data-key="exp-${e.id}"${ui.open[`exp-${e.id}`] ? ' open' : ''}><summary>Details</summary><ul>${extra}${lines}</ul></details></div>
       <div class="row-side"><div class="amount">${money(e.amountCents)}<small>${share !== undefined ? `Your share ${money(share)}` : 'Not in split'}</small></div>${menu({ id: `e-${e.id}`, label: `More actions for ${e.description}`, items: [{ label: 'Edit expense', icon: 'edit', action: 'edit-expense', data: { id: e.id } }, '-', { label: 'Delete expense', icon: 'trash', action: 'delete-expense', data: { id: e.id }, danger: true }] })}</div></li>`;
   };
-  const reRow = (r) => `<li class="row"><div class="row-lead">${ic('repeatSm', 18)}</div><div class="row-main"><div class="row-title">${esc(who(r.fromId))} repaid ${esc(name(r.toId))}</div><div class="row-meta"><span>${L.fmtDay(r.date)}</span><span>Paid outside RoomSync</span>${r.note ? `<span>${esc(r.note)}</span>` : ''}</div></div>
+  const reRow = (r) => `<li class="row"><div class="row-lead">${ic('repeatSm', 18)}</div><div class="row-main"><div class="row-title">${esc(who(r.fromId))} repaid ${esc(name(r.toId))}</div><div class="row-meta"><span>${L.fmtDay(r.date)}</span><span>Paid outside Kasa</span>${r.note ? `<span>${esc(r.note)}</span>` : ''}</div></div>
     <div class="row-side"><div class="amount">${money(r.amountCents)}</div>${menu({ id: `r-${r.id}`, label: 'More actions for repayment', items: [{ label: 'Delete repayment', icon: 'trash', action: 'delete-reimb', data: { id: r.id }, danger: true }] })}</div></li>`;
   const balances = `<table><caption class="sr-only">Net balance by roommate</caption><thead><tr><th scope="col">Roommate</th><th scope="col" class="num">Balance</th></tr></thead><tbody>${s.members.map((m) => `<tr><th scope="row">${avatar(m.id)} ${esc(m.name)}${m.id === me ? ' (you)' : ''}</th><td class="num">${bal[m.id] > 0 ? `Is owed ${money(bal[m.id])}` : bal[m.id] < 0 ? `Owes ${money(-bal[m.id])}` : 'Settled up'}</td></tr>`).join('')}</tbody></table>`;
   return `<div class="page-head"><h1>Expenses &amp; shopping</h1></div>${tabsNav}
@@ -349,7 +349,7 @@ function viewProfile() {
   const banner = `<div class="panel-soft" style="margin-bottom:16px"><p class="small"><strong>${ic('info', 14)}Local only — no account or sync yet</strong></p><p class="hint" style="margin-top:4px">This interim profile is saved in this browser on this device. There are no accounts, no sync, and no privacy guarantee. Real synced profiles come later.</p></div>`;
   const form = `<form data-inline="profile" novalidate style="padding-top:12px">
     <div class="field"><label for="f-dietary">Dietary restrictions / preferences <span class="opt">(optional)</span></label><textarea id="f-dietary" name="dietary" class="qa-notes" maxlength="300" placeholder="e.g. Vegetarian, no nuts">${esc(p.dietary)}</textarea><p class="field-error" id="err-dietary" hidden></p></div>
-    ${field('budgetCents', 'Personal monthly budget (USD)', input('budgetCents', budgetVal, 'inputmode="decimal" placeholder="0.00" autocomplete="off"'), { optional: true, hint: 'Just for you. RoomSync shows this as information only and never blocks spending.' })}
+    ${field('budgetCents', 'Personal monthly budget (USD)', input('budgetCents', budgetVal, 'inputmode="decimal" placeholder="0.00" autocomplete="off"'), { optional: true, hint: 'Just for you. Kasa shows this as information only and never blocks spending.' })}
     <div class="field"><label for="f-rules">Personal roommate rules <span class="opt">(optional)</span></label><textarea id="f-rules" name="rules" class="qa-notes" maxlength="300" placeholder="e.g. Please knock before coming into my room">${esc(p.rules)}</textarea><p class="field-error" id="err-rules" hidden></p></div>
     <button type="submit" class="btn primary">Save profile</button></form>`;
   const mine = sec('me-profile', `Your profile`, form, { icon: 'user' });
@@ -369,7 +369,7 @@ function viewNotifications() {
   const unread = list.filter((n) => !n.read).length;
   return `<div class="page-head"><div><h1>Notifications</h1><p class="sub">${unread ? `${unread} unread` : 'All caught up'} · for ${esc(name(store.me()))}</p></div><div class="head-actions"><button type="button" class="btn" data-action="read-all"${unread ? '' : ' disabled'}>Mark all read</button><a class="btn quiet" href="#/settings">Reminder settings</a></div></div>
     ${groups.length ? groups.map(([g, items]) => sec(`n-${g}`, g, `<ul class="list">${items.map(row).join('')}</ul>`)).join('') : empty('You’re all caught up', 'Assignments, due dates, new expenses and calendar changes show up here.')}
-    <p class="small muted" style="margin-top:24px">Notifications are shown inside RoomSync only. Nothing is sent to phones or email.</p>`;
+    <p class="small muted" style="margin-top:24px">Notifications are shown inside Kasa only. Nothing is sent to phones or email.</p>`;
 }
 
 // ---------- Settings ----------
@@ -403,7 +403,7 @@ function purchasingRulesSection() {
   return sec('purchrules', 'Purchasing rules', `${budget}
     ${listBlock('Preferred products', p.preferredProducts || [], 'add-preferred-product', 'Add preferred product', 'remove-preferred-product', 'preferred product')}
     ${listBlock('Store preferences', p.storePreferences || [], 'add-store-preference', 'Add store preference', 'remove-store-preference', 'store preference')}
-    <p class="hint">Shared buying standards. They appear as non-blocking guidance in the shopping flow — RoomSync never blocks spending.</p>`, { icon: 'cart' });
+    <p class="hint">Shared buying standards. They appear as non-blocking guidance in the shopping flow — Kasa never blocks spending.</p>`, { icon: 'cart' });
 }
 function viewSettings() {
   const s = store.state, p = store.prefsOf(store.me());
@@ -414,14 +414,14 @@ function viewSettings() {
   ${purchasingRulesSection()}
   ${sec('pref', `Reminders for ${name(store.me())}`, `<form data-inline="prefs" style="padding-top:12px">${toggleRow('reminders', 'Remind me when my chores are due soon or overdue', p.reminders)}
     <div class="field" style="max-width:320px;margin-top:8px"><label for="f-leadDays">Remind me</label>${select('leadDays', [[0, 'On the day it’s due'], [1, '1 day before'], [2, '2 days before']], p.leadDays, 'data-change="pref"')}</div>
-    ${toggleRow('updates', 'Tell me about assignments, shared expenses and calendar changes', p.updates)}</form><p class="hint">Reminders appear in RoomSync’s notification list while the app is open. Background push, email and text messages aren’t part of this version.</p>`)}
+    ${toggleRow('updates', 'Tell me about assignments, shared expenses and calendar changes', p.updates)}</form><p class="hint">Reminders appear in Kasa’s notification list while the app is open. Background push, email and text messages aren’t part of this version.</p>`)}
   ${sec('channels', `Notification channels for ${name(store.me())}`, `<form data-inline="channels" style="padding-top:12px">
     <label class="inline-check"><input type="checkbox" name="inApp" checked disabled data-change="pref-channels"> In-app notifications <span class="muted">(always on)</span></label>
     <label class="inline-check"><input type="checkbox" name="push" ${p.channels.push ? 'checked' : ''} data-change="pref-channels"> Push notifications <span class="muted">(coming soon)</span></label>
     <label class="inline-check"><input type="checkbox" name="sms" ${p.channels.sms ? 'checked' : ''} data-change="pref-channels"> Text messages / SMS <span class="muted">(coming soon)</span></label></form><p class="hint">Only in-app delivery works in this version. Your push and text message choices are saved for a future update but don’t send anything yet.</p>`)}
-  ${disclosure('proto', 'About this prototype', `<ul class="small" style="margin:0;padding-left:18px"><li>Data is saved in this browser on this device. It doesn’t sync to other devices.</li><li>There are no accounts or invite codes. “Viewing as” switches between the roommates stored here.</li><li>Notifications are in-app only.</li><li>Repayments update RoomSync’s records. RoomSync never moves money.</li></ul>`)}
+  ${disclosure('proto', 'About this prototype', `<ul class="small" style="margin:0;padding-left:18px"><li>Data is saved in this browser on this device. It doesn’t sync to other devices.</li><li>There are no accounts or invite codes. “Viewing as” switches between the roommates stored here.</li><li>Notifications are in-app only.</li><li>Repayments update Kasa’s records. Kasa never moves money.</li></ul>`)}
   ${sec('guide', 'Getting started', `<p class="small" style="padding-top:12px">New here, or showing someone else around? Show the getting-started tips again — each tab’s quick tip reappears the next time you open it.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="replay-tour">${ic('info', 16)}Show the getting-started tips again</button></p>`)}
-  ${sec('res', 'Research tools', `<p class="small" style="padding-top:12px">RoomSync logs basic usage events on this device only (household created, chores assigned and completed, expenses, purchases, calendar events, tutorial progress). Nothing is uploaded. ${plural(s.analytics.length, 'event')} recorded.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="export">Download events (JSON)</button></p>`)}
+  ${sec('res', 'Research tools', `<p class="small" style="padding-top:12px">Kasa logs basic usage events on this device only (household created, chores assigned and completed, expenses, purchases, calendar events, tutorial progress). Nothing is uploaded. ${plural(s.analytics.length, 'event')} recorded.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="export">Download events (JSON)</button></p>`)}
   ${sec('danger', 'Danger zone', `<p class="small" style="padding-top:12px">${s.mode === 'demo' ? 'Resets the demo and returns to the welcome screen.' : 'Permanently deletes this household’s data from this browser.'}</p><p style="margin-top:12px"><button type="button" class="btn danger-outline" data-action="reset">${s.mode === 'demo' ? 'Reset demo' : 'Delete all data'}</button></p>`, { danger: true })}`;
 }
 
@@ -541,11 +541,11 @@ function openReimbForm(preset = {}) {
   const fromId = preset.from || store.me(), others = store.memberIds().filter((id) => id !== fromId);
   openModal({
     title: 'Record repayment', submitLabel: 'Record repayment',
-    body: `<p class="small" style="margin-bottom:16px">Record a payment you made outside RoomSync. RoomSync doesn’t move money.</p>${tokenInput()}
+    body: `<p class="small" style="margin-bottom:16px">Record a payment you made outside Kasa. Kasa doesn’t move money.</p>${tokenInput()}
       <div class="row2 stack-sm">${field('fromId', 'Who paid', select('fromId', memberOpts(), fromId))}${field('toId', 'Paid to', select('toId', memberOpts(), preset.to || others[0]))}</div>
       <div class="row2 stack-sm">${field('amount', 'Amount (USD)', input('amount', preset.cents ? (preset.cents / 100).toFixed(2) : '', 'inputmode="decimal" placeholder="0.00" autocomplete="off"'))}${field('date', 'Date', `<input type="date" id="f-date" name="date" value="${today()}">`)}</div>
       ${field('note', 'Note', input('note', '', 'maxlength="80" placeholder="e.g. Venmo, cash"'), { optional: true })}`,
-    onSubmit: (d) => { const res = store.addReimbursement(d); if (res.ok) toast('Repayment recorded. No money was moved by RoomSync.'); return res; },
+    onSubmit: (d) => { const res = store.addReimbursement(d); if (res.ok) toast('Repayment recorded. No money was moved by Kasa.'); return res; },
   });
 }
 function openItemForm(item) {
@@ -612,7 +612,7 @@ function openBudgetForm() {
   const cents = store.state.purchasing && store.state.purchasing.budgetCents;
   openModal({
     title: 'Shared monthly budget', submitLabel: 'Save budget',
-    body: `<p class="small" style="margin-bottom:16px">A shared monthly spending guide. RoomSync shows remaining budget as information only — it never blocks spending. Leave blank to clear it.</p>
+    body: `<p class="small" style="margin-bottom:16px">A shared monthly spending guide. Kasa shows remaining budget as information only — it never blocks spending. Leave blank to clear it.</p>
       ${field('amount', 'Monthly budget (USD)', input('amount', cents != null ? (cents / 100).toFixed(2) : '', 'inputmode="decimal" placeholder="0.00" autocomplete="off"'), { optional: true })}`,
     onSubmit: (d) => {
       const res = store.setPurchasingBudget(d.amount);
@@ -711,7 +711,7 @@ const actions = {
   'edit-expense': (d) => openExpenseForm(byId(store.state.expenses, d.id)),
   'delete-expense': (d) => { const e = byId(store.state.expenses, d.id); confirmDialog({ title: 'Delete this expense?', message: `<strong>${esc(e.description)}</strong> (${money(e.amountCents)}) will be removed and balances recalculated.`, confirmLabel: 'Delete expense', onConfirm: () => { store.deleteExpense(d.id); afterDelete(); } }); },
   'add-reimb': (d) => openReimbForm({ from: d.from, to: d.to, cents: d.cents ? Number(d.cents) : 0 }),
-  'delete-reimb': (d) => confirmDialog({ title: 'Delete this repayment?', message: 'Balances will be recalculated. RoomSync never moved any money, so this only changes the record.', confirmLabel: 'Delete repayment', onConfirm: () => { store.deleteReimbursement(d.id); afterDelete(); } }),
+  'delete-reimb': (d) => confirmDialog({ title: 'Delete this repayment?', message: 'Balances will be recalculated. Kasa never moved any money, so this only changes the record.', confirmLabel: 'Delete repayment', onConfirm: () => { store.deleteReimbursement(d.id); afterDelete(); } }),
   'add-item': () => openItemForm(null),
   'edit-item': (d) => openItemForm(byId(store.state.shopping, d.id)),
   'delete-item': (d) => { const i = byId(store.state.shopping, d.id); confirmDialog({ title: 'Remove this item?', message: `Remove <strong>${esc(i.name)}</strong> from the shopping list?`, confirmLabel: 'Remove item', onConfirm: () => { store.deleteItem(d.id); afterDelete(); } }); },
@@ -793,7 +793,7 @@ function render() {
   const route = parseRoute();
   const a = document.activeElement;
   const sig = a && app.contains(a) ? focusSig(a) : null;
-  if (!store.state) { app.innerHTML = loadError ? viewLoadError() : viewWelcome(); document.title = 'RoomSync'; return; }
+  if (!store.state) { app.innerHTML = loadError ? viewLoadError() : viewWelcome(); document.title = 'Kasa'; return; }
   const [section, sub] = route.parts;
   let page;
   switch (section) {
@@ -816,7 +816,7 @@ function render() {
   // Phones: the roommate switcher lives inside the demo controls so the header stays quiet; the chip still names who you are viewing as.
   const status = `<div class="statusbar"><details class="status"><summary>${ic('info', 14)}<span class="dot" aria-hidden="true"></span>${isNarrow ? `${modeName} · Viewing as ${esc(name(s.currentUserId))}` : `${modeName} · Saved on this device`}</summary><div class="panel"><strong style="color:var(--color-text)">${s.mode === 'demo' ? 'Demo household' : 'Local household'} · ${esc(s.household.name)}</strong>
     ${isNarrow ? `<div class="panel-viewer">${viewerSelect('Viewing as')}<p class="hint">Preview each roommate’s view. This isn’t a login.</p></div>` : ''}
-    <ul><li>Saved on this device only. It doesn’t sync to other devices.</li><li>${isNarrow ? 'Switching roommates previews their chores and balance.' : '“Viewing as” previews each roommate. There are no accounts yet.'}</li><li>Notifications show inside RoomSync only.</li></ul></div></details></div>`;
+    <ul><li>Saved on this device only. It doesn’t sync to other devices.</li><li>${isNarrow ? 'Switching roommates previews their chores and balance.' : '“Viewing as” previews each roommate. There are no accounts yet.'}</li><li>Notifications show inside Kasa only.</li></ul></div></details></div>`;
   const sidebar = `<aside class="sidebar" aria-label="Sidebar"><div class="side-head">${household}</div>
     <div class="side-viewer"><label for="switch-user">Viewing as</label><div class="side-tools"><select id="switch-user" data-change="switch-user">${s.members.map((m) => `<option value="${m.id}"${m.id === s.currentUserId ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>${bell}${gear}</div></div>
     ${menu({ id: 'add-side', label: 'Add to household', icon: 'plus', text: 'Add', cls: 'nav-add', items: ADD_ITEMS })}
@@ -827,7 +827,7 @@ function render() {
       ${store.saveError ? `<div class="banner-error" role="alert">Couldn’t save to this browser (storage may be full or blocked). Recent changes will be lost if you close or refresh this page.</div>` : ''}
       <main id="main" tabindex="-1" class="${key === 'home' || key === 'calendar' ? 'wide' : ''}">${isNarrow ? status : ''}${page}</main></div>
     ${isNarrow ? `<nav class="bottomnav" aria-label="Primary">${navLinks(false)}${menu({ id: 'add-fab', label: 'Add', icon: 'plus', cls: 'fab', wrap: 'fab-wrap', items: ADD_ITEMS })}</nav>` : ''}</div>`;
-  document.title = `${TITLES[key]} · RoomSync`;
+  document.title = `${TITLES[key]} · Kasa`;
   afterRender(route, sig);
 }
 function viewLoadError() {

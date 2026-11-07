@@ -1,8 +1,8 @@
-# RoomSync Roadmap
+# Kasa Roadmap
 
 _Last updated: 2026-10-23_
 
-This roadmap sequences RoomSync's delivery across phases. It pairs with `docs/master-plan.md`
+This roadmap sequences Kasa's delivery across phases. It pairs with `docs/master-plan.md`
 (the why) and the spec at `.kiro/specs/household-coordination-v2/` (the detailed how for the
 local-first phase).
 
@@ -15,7 +15,7 @@ the backend implements.
 
 ## Phase 0 — Current app _(done)_
 
-The shipped RoomSync: chores (one-time + weekly, completion-driven rotation), expenses with
+The shipped Kasa: chores (one-time + weekly, completion-driven rotation), expenses with
 exact-cent equal splits, balances/settlements, reimbursements, shopping list with
 purchase-to-expense linking, shared calendar, in-app notifications and reminders, per-user
 reminder preferences, guided tour, on-device analytics. Local-only, single device, no
@@ -64,7 +64,7 @@ Scope:
 - Migration path: import a local household's state into the first authenticated account so
   nothing is lost moving from local to synced.
 
-**Dependencies:** a backend service and datastore (first server-side component in RoomSync's
+**Dependencies:** a backend service and datastore (first server-side component in Kasa's
 history). Auth provider for Google sign-in; phone verification provider.
 
 **Exit criteria:** a roommate can sign in on two devices and see the same profile; phone
@@ -74,7 +74,7 @@ number is verified and stored; local-to-account migration works.
 
 ## Phase 3 — Push and SMS delivery _(after accounts)_
 
-**Goal:** turn RoomSync notifications from in-app-only into real reminders on the phone.
+**Goal:** turn Kasa notifications from in-app-only into real reminders on the phone.
 
 Scope:
 
@@ -96,7 +96,7 @@ incoming swap request; preferences correctly suppress channels a user turned off
 
 ## Phase 4 — B2B multi-tenancy and property-manager surface
 
-**Goal:** make RoomSync sellable to apartment operators.
+**Goal:** make Kasa sellable to apartment operators.
 
 Scope:
 
