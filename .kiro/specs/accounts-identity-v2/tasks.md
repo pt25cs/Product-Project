@@ -132,13 +132,25 @@ user-visible, and unblocks everything else without depending on the backend.
     reflect that accounts/backend now exist; update `docs/roadmap.md` Phase 2 status when done.
   - _Requirements: NFR 2, NFR 4, NFR 5; 9.3; roadmap Phase 2 exit criteria._
 
-- [ ] 12. Full verification pass
+- [x] 12. Full verification pass
   - Run `node --test` (store authenticated path with fakes, migration mapping, phone-verify,
     rename assertions) + RLS policy tests on Supabase local. Confirm: no secret committed or
     shipped to the browser; demo/local path still works with no backend; existing local saves
     still load and feed migration. Then perform the documented manual live check with real
     credentials and record results against the roadmap exit criteria.
   - _Requirements: all; NFR 1, 2, 3, 5, 6, 7, 8._
+  - **Results:**
+    - Automated: `npm test` **161/161** (unit + contrast, incl. auth/session/backend/profile/
+      household-ops/migration/phone-verify); `npm run db:test` **6/6** (RLS isolation +
+      transactional import RPC against local Postgres). All green.
+    - Secrets: no `.env` / `config.js` / token / `functions/.env` tracked by git; both ignored.
+      Browser holds only the publishable URL+key; service-role/Twilio live server-side only.
+    - Demo path: `config.js` not committed → a fresh clone runs demo-only, fully offline (NFR 1).
+    - **Live (production Supabase):** Google sign-in ✅; create household ✅; local→account import
+      ✅ (verified data in prod DB: 1 household, 4 members incl. 3 placeholders, 6 chores,
+      2 expenses, 4 events); server-backed profiles ✅ → two-device parity holds.
+    - **Deferred:** live SMS verification (Twilio paid gate; non-blocking per R2.7) and the
+      browser-automation e2e sweep (Playwright unavailable in this environment). Both documented.
 
 ---
 
