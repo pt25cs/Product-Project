@@ -36,7 +36,7 @@ user-visible, and unblocks everything else without depending on the backend.
   - _Test:_ existing `node --test` suite and `serve.mjs` still run from the new layout; no
     source import breaks.
 
-- [ ] 3. Define the Postgres schema and RLS as versioned migrations
+- [x] 3. Define the Postgres schema and RLS as versioned migrations
   - SQL migrations under `supabase/migrations/`: `profiles`, `households`, `memberships`,
     `invitations`, and household-content tables (chores/occurrences/expenses/reimbursements/
     shopping/events/expectations/purchasing/notifications/activity) each with `household_id`
