@@ -10,7 +10,22 @@ export const STARTER_CHORES = [
   { key: 'bathroom', title: 'Clean bathroom' },
 ];
 
-export function createStore({ storage, now = () => new Date() } = {}) {
+/**
+ * @param {object}  opts
+ * @param {object}  opts.storage  localStorage-shaped store (local/demo path).
+ * @param {function} [opts.now]
+ * @param {object}  [opts.backend]  OPTIONAL backend adapter for the AUTHENTICATED path
+ *   (Phase 2, Requirement 8). When omitted, the store behaves exactly as the local/demo
+ *   build does today (Requirement 8.5/8.6 — the demo never touches a backend). The adapter
+ *   shape (all methods async):
+ *     backend.loadHousehold()            -> normalized state object, or null if none yet
+ *     backend.saveHousehold(state)       -> persists the full state; resolves on success,
+ *                                           rejects/throws on failure (surfaces saveError)
+ *     backend.currentUserId()            -> membership id of the signed-in user (replaces me())
+ * Keeping persistence here — behind the unchanged action functions — is the seam the UI
+ * relies on (Requirement 8.1).
+ */
+export function createStore({ storage, now = () => new Date(), backend = null } = {}) {
   let state = null;
   let counter = 0;
   let undoSlot = null;
@@ -25,6 +40,7 @@ export function createStore({ storage, now = () => new Date() } = {}) {
   const emit = () => subs.forEach((fn) => fn());
 
   // ---------- persistence ----------
+  // Local/demo path: synchronous localStorage, unchanged from today.
   function load() {
     try {
       const raw = storage.getItem(STORAGE_KEY);
@@ -40,7 +56,46 @@ export function createStore({ storage, now = () => new Date() } = {}) {
       return { ok: true };
     }
   }
+
+  /**
+   * Authenticated path: hydrate `state` from the backend (Requirement 8). Async because the
+   * network is async; the UI awaits this once at startup, then every mutation persists via the
+   * synchronous `save()` write-through below. Returns {ok} / {ok:false,error} mirroring load().
+   */
+  async function loadRemote() {
+    if (!backend) return load();
+    try {
+      const s = await backend.loadHousehold();
+      state = s ? normalize(s) : null;
+      saveError = null;
+      emit();
+      return { ok: true };
+    } catch (e) {
+      // Backend unreachable: surface clearly, do NOT corrupt or fall back silently (R6.6).
+      state = null; saveError = e;
+      emit();
+      return { ok: false, error: 'Kasa needs a connection to load your account. Please try again.' };
+    }
+  }
+
+  /**
+   * Persist the current state.
+   *  - Local/demo path: synchronous localStorage write (unchanged).
+   *  - Authenticated path: optimistic write-through. In-memory state + subscribers are already
+   *    updated by commit(); we fire the async backend persist and, on failure, set `saveError`
+   *    and re-emit so the UI's existing save-failure banner lights up (Requirement 8.3). This
+   *    keeps the action functions synchronous (Requirement 8.1) while writing to the backend.
+   * Returns true optimistically for the backend path (the real result arrives via saveError+emit).
+   */
   function save() {
+    if (backend) {
+      const snapshot = JSON.parse(JSON.stringify(state));
+      Promise.resolve()
+        .then(() => backend.saveHousehold(snapshot))
+        .then(() => { if (saveError) { saveError = null; emit(); } })
+        .catch((e) => { saveError = e; emit(); });
+      return true;
+    }
     try { storage.setItem(STORAGE_KEY, JSON.stringify(state)); saveError = null; return true; }
     catch (e) { saveError = e; return false; }
   }
@@ -90,7 +145,15 @@ export function createStore({ storage, now = () => new Date() } = {}) {
   }
 
   // ---------- small helpers ----------
-  const me = () => state.currentUserId;
+  // Authenticated path: identity comes from the backend (the signed-in user), replacing the
+  // demo "Viewing as" selection (Requirement 1.7 / 9.1). Local/demo path: currentUserId as today.
+  const me = () => {
+    if (backend && typeof backend.currentUserId === 'function') {
+      const id = backend.currentUserId();
+      if (id != null) return id;
+    }
+    return state.currentUserId;
+  };
   const memberIds = () => state.members.map((m) => m.id);
   const isMember = (id) => state.members.some((m) => m.id === id);
   const nameOf = (id) => (state.members.find((m) => m.id === id) || { name: 'Former roommate' }).name;
@@ -1076,7 +1139,8 @@ export function createStore({ storage, now = () => new Date() } = {}) {
   }
 
   return {
-    load, save, reset, subscribe: (fn) => { subs.add(fn); return () => subs.delete(fn); },
+    load, loadRemote, save, reset, subscribe: (fn) => { subs.add(fn); return () => subs.delete(fn); },
+    get isBackend() { return !!backend; },
     get state() { return state; }, get saveError() { return saveError; }, get storageBroken() { return storageBroken; },
     get undoLabel() { return undoSlot ? undoSlot.label : null; },
     today, nowLocal, nameOf, me, memberIds, prefsOf, sel,

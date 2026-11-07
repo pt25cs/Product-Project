@@ -54,7 +54,7 @@ user-visible, and unblocks everything else without depending on the backend.
   - _Test:_ with a mocked provider, sign-in establishes a session, sign-out clears it, expired
     session triggers refresh then falls back to signed-out.
 
-- [ ] 5. Add the backend-backed persistence seam to the store
+- [x] 5. Add the backend-backed persistence seam to the store
   - Extend `createStore({ storage, backend, now })`: when `backend` is present, `load()`
     hydrates `state` from the backend and `save()`/`commit()` persist mutations through it;
     when absent, behavior is exactly today (local/demo). `me()` returns the authenticated
