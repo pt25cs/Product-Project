@@ -19,21 +19,26 @@ let backend = null;   // store backend adapter when authenticated
 let store = createStore({ storage });   // demo/local store by default; replaced if authenticated
 const app = $('#app');
 const hasLocalHousehold = () => { try { return !!storage.getItem(STORAGE_KEY); } catch { return false; } };
-const session = createSession({ get auth() { return auth; }, hasLocalHousehold });
+const session = createSession({ getAuth: () => auth, hasLocalHousehold });
 
 async function tryInitBackend() {
   let cfg;
-  try { cfg = await import('./config.js'); } catch { return; }   // no config.js -> demo-only
-  if (!cfg || !cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) return;
+  try { cfg = await import('./config.js'); } catch (e) { console.info('[Kasa] no config.js — running demo-only.'); return; }
+  if (!cfg || !cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) { console.info('[Kasa] config.js present but blank — demo-only.'); return; }
   try {
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.119.0');
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.119.0?bundle');
     const { createAuth } = await import('./auth.js');
     const client = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
     auth = createAuth({ client });
     await auth.init();
     auth.onChange(() => applyAuthMode());
     window.__kasaClient = client;   // used by sign-in/migration wiring
-  } catch (e) { auth = null; /* fall back to demo-only on any failure */ }
+    console.info('[Kasa] backend ready — sign-in available.');
+  } catch (e) {
+    auth = null;
+    window.__kasaInitError = (e && (e.stack || e.message)) || String(e);
+    console.error('[Kasa] backend init failed; falling back to demo-only:', e);
+  }
 }
 
 // Swap the store to the authenticated backend when a session appears; back to local on sign-out.
@@ -54,6 +59,26 @@ async function applyAuthMode() {
     store.load();
     render();
   }
+}
+
+/** Invoke a Supabase edge function with the current session, returning parsed JSON. */
+async function invokeFn(name, body) {
+  if (!window.__kasaClient) return { ok: false, error: 'Not connected.' };
+  const { data, error } = await window.__kasaClient.functions.invoke(name, { body });
+  if (error) {
+    // edge functions return {error} in the body on 4xx; surface that if present
+    try { const j = await error.context?.json?.(); if (j && j.error) return { ok: false, error: j.error }; } catch { /* ignore */ }
+    return { ok: false, error: 'Request failed. Please try again.' };
+  }
+  return data ?? { ok: false, error: 'Empty response.' };
+}
+
+/** Re-hydrate the authenticated store from the backend after an onboarding action. */
+async function reloadAccount() {
+  if (!backend) await applyAuthMode();
+  else { await store.loadRemote(); }
+  location.hash = '#/home';
+  render();
 }
 
 // Home dropdowns default: chores expanded (primary content), the rest collapsed to keep the home calm.
@@ -721,6 +746,29 @@ const actions = {
   'start-demo': () => { session.enterDemo(); store.startDemo(); ui.welcome = null; location.hash = '#/home'; toast('Demo ready. You’re viewing as Maya.'); },
   'sign-in-google': async () => { if (!auth) return; const res = await auth.signInWithGoogle(window.location.origin); if (!res.ok) toast(res.error); },
   'sign-out': async () => { if (!auth) return; await auth.signOut(); session.exitDemo(); location.hash = '#/home'; await applyAuthMode(); toast('Signed out.'); },
+  // ----- authenticated onboarding (no household yet): create / join / import -----
+  'hh-create': async (d, el) => {
+    const box = el.closest('.hh-form');
+    const name = $('[name="householdName"]', box)?.value || '';
+    const displayName = $('[name="displayName"]', box)?.value || '';
+    const res = await invokeFn('household', { action: 'create', name, displayName });
+    if (!res.ok) return toast(res.error || 'Could not create the household.');
+    await reloadAccount(); toast('Household created.');
+  },
+  'hh-join': async (d, el) => {
+    const box = el.closest('.hh-form');
+    const code = $('[name="code"]', box)?.value || '';
+    const displayName = $('[name="displayName"]', box)?.value || '';
+    const res = await invokeFn('household', { action: 'accept', code, displayName });
+    if (!res.ok) return toast(res.error || 'Could not join with that code.');
+    await reloadAccount(); toast('Joined the household.');
+  },
+  'hh-import': async () => {
+    const { runMigration } = await import('./migrate.mjs');
+    const res = await runMigration(storage, (payload) => invokeFn('migrate-import', payload));
+    if (!res.ok) return toast(res.error || 'Import failed. Your local data is unchanged.');
+    await reloadAccount(); toast(res.alreadyImported ? 'Your data was already imported.' : 'Imported your household.');
+  },
   'show-create': () => { ui.welcome = 'create'; render(); $('#f-userName')?.focus(); },
   'hide-create': () => { ui.welcome = null; render(); },
   'add-roommate': (d, el) => { const box = $('#others'); const n = box.children.length + 1; if (n > 4) return; box.insertAdjacentHTML('beforeend', roommateRow(n)); $$('input', box).at(-1).focus(); if (n >= 4) el.disabled = true; },
@@ -842,7 +890,15 @@ function render() {
   const route = parseRoute();
   const a = document.activeElement;
   const sig = a && app.contains(a) ? focusSig(a) : null;
-  if (!store.state) { app.innerHTML = loadError ? viewLoadError() : viewWelcome(); document.title = 'Kasa'; return; }
+  if (!store.state) {
+    document.title = 'Kasa';
+    // Signed in but no household yet -> onboarding (create/join/import). Otherwise the welcome
+    // screen (signed-out or demo entry point). Load errors take precedence.
+    app.innerHTML = loadError ? viewLoadError()
+      : session.mode() === 'authenticated' ? viewAccountOnboarding()
+      : viewWelcome();
+    return;
+  }
   const [section, sub] = route.parts;
   let page;
   switch (section) {
@@ -880,6 +936,26 @@ function render() {
     ${isNarrow ? `<nav class="bottomnav" aria-label="Primary">${navLinks(false)}${menu({ id: 'add-fab', label: 'Add', icon: 'plus', cls: 'fab', wrap: 'fab-wrap', items: ADD_ITEMS })}</nav>` : ''}</div>`;
   document.title = `${TITLES[key]} · Kasa`;
   afterRender(route, sig);
+}
+// Authenticated but no household yet: create / join / import the local demo data (R5, R7).
+function viewAccountOnboarding() {
+  const hasLocal = (() => { try { return !!storage.getItem(STORAGE_KEY); } catch { return false; } })();
+  return `<main id="main" class="welcome" tabindex="-1"><div><span class="logo">${ic('home', 22)}</span></div>
+  <div><h1>You’re signed in. Let’s set up your household.</h1><p class="lead">Create a new household, join one with an invite code${hasLocal ? ', or bring in the data you already have on this device' : ''}.</p></div>
+  ${hasLocal ? `<section class="create-form"><div class="sec-head" style="border:0"><h2>Import your existing household</h2></div>
+    <p class="small">You have a household saved on this device. Import it into your account — your local copy is kept until the import succeeds.</p>
+    <p style="margin-top:12px"><button type="button" class="btn primary" data-action="hh-import">Import my household</button></p></section>` : ''}
+  <section class="create-form"><div class="sec-head" style="border:0"><h2 id="h-hh-create">Create a household</h2></div>
+    <div class="hh-form">
+    ${field('displayName', 'Your display name', input('displayName', '', 'maxlength="30" autocomplete="given-name"'))}
+    ${field('householdName', 'Household name', input('householdName', '', 'maxlength="60" placeholder="e.g. Elm Street 3B"'))}
+    <button type="button" class="btn${hasLocal ? '' : ' primary'}" data-action="hh-create" style="width:100%">Create household</button></div></section>
+  <section class="create-form"><div class="sec-head" style="border:0"><h2>Join with an invite code</h2></div>
+    <div class="hh-form">
+    ${field('code', 'Invite code', input('code', '', 'maxlength="8" autocapitalize="characters" placeholder="e.g. K7P2Q9MX"'))}
+    ${field('displayName', 'Your display name', input('displayName', '', 'maxlength="30"'))}
+    <button type="button" class="btn" data-action="hh-join" style="width:100%">Join household</button></div></section>
+  <p style="margin-top:8px"><button type="button" class="btn quiet sm" data-action="sign-out">Sign out</button></p></main>`;
 }
 function viewLoadError() {
   return `<main id="main" class="welcome" tabindex="-1"><h1>We couldn’t read your saved data</h1><p class="lead">${esc(loadError)}</p><button type="button" class="btn danger" data-action="retry-load">Clear saved data and start fresh</button></main>`;
@@ -927,8 +1003,15 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
 if (store.state) store.runReminders();
 render();
 window.__roomsync = store; // handy for debugging and automated checks (updated on store swap)
+window.__kasaSession = session; // debug: inspect mode()/canSignIn() from the console
 
 // Phase 2: attempt backend init AFTER the local/demo app is already interactive, so the demo
 // path is never blocked or delayed by network/module loading (Requirement 8.5/8.6). If auth is
 // configured and a session exists, applyAuthMode() swaps in the authenticated store.
-tryInitBackend().then(() => { if (auth && auth.isAuthenticated()) return applyAuthMode(); render(); });
+tryInitBackend().then(async () => {
+  // Backend init finished. If already signed in, swap to the authenticated store; otherwise
+  // just re-render so the now-available "Continue with Google" button appears on the welcome
+  // screen (the first render ran before auth was ready).
+  if (auth && auth.isAuthenticated()) await applyAuthMode();
+  render();
+});

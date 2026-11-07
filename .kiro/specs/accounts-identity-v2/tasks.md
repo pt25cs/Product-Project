@@ -168,3 +168,26 @@ roadmap's live exit criteria — real Google sign-in, a real verification SMS, a
 profile on two devices — require a provisioned **Supabase project, Google OAuth client, and
 Twilio Verify service** with real secrets in `.env`. Those credentials come from the product
 owner; the design keeps every secret out of the repo and the browser.
+
+## Front-end follow-ups (post-backend UI polish)
+
+Captured from live testing of the authenticated flow. These are **UI/UX refinements**, not
+backend work — deferred until the backend phases wrap, per the owner's call. The backend and
+data model fully support them; they are presentation changes in `app.js`/`styles.css`.
+
+- [ ] F1. Welcome screen: the local "Create your household" option is now redundant for signed-in
+  sync. On a backend-configured deploy, either remove the local "Create your household" choice
+  from `viewWelcome` or repoint it to the Google sign-in flow, so real (synced) households are
+  always created through an authenticated account rather than a local-only one. (Keep the local
+  create path for pure-demo/offline deployments where no backend is configured.)
+
+- [ ] F2. Profile / account area: add a visible **Sign out** control and show the signed-in
+  **account email** in the Profile section (currently sign-out lives only in Settings → Account,
+  and the email isn't surfaced). Source the email from `auth.currentUser().email`.
+
+- [ ] F3. Profile section visual grouping: the profile currently reads as one continuous block.
+  Wrap its distinct areas (identity/email, dietary, personal budget, personal rules, phone
+  verification) in the app's card/panel chrome so each is a clearly separated section, consistent
+  with the rest of the UI.
+
+_All three are front-end only; no schema, RLS, or edge-function changes required._

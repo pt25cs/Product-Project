@@ -10,12 +10,14 @@
 // The demo stays permanently local (Requirement 8.6): entering demo never constructs auth and
 // never contacts a backend. Signing in is a separate, explicit path.
 
-export function createSession({ auth = null, hasLocalHousehold = () => false } = {}) {
-  // `auth` is a createAuth(...) instance on the authenticated build, or null when the app is
-  // running with no backend configured (pure demo deployment).
+export function createSession({ getAuth = () => null, hasLocalHousehold = () => false } = {}) {
+  // `getAuth()` returns the createAuth(...) instance once available, or null when no backend is
+  // configured (pure demo deployment). It MUST be a function (not a captured value) so the
+  // session reflects auth being wired in asynchronously after boot.
   let demoActive = false;
 
-  function authed() { return !!(auth && auth.isAuthenticated()); }
+  const auth = () => getAuth();
+  function authed() { const a = auth(); return !!(a && a.isAuthenticated()); }
 
   /** The current mode (Requirement 1.1, 9.1/9.2). */
   function mode() {
@@ -28,7 +30,7 @@ export function createSession({ auth = null, hasLocalHousehold = () => false } =
   function showViewingAs() { return mode() === 'demo'; }
 
   /** Whether a Google sign-in affordance should be offered (only when auth is configured). */
-  function canSignIn() { return !!auth; }
+  function canSignIn() { return !!auth(); }
 
   /** Enter the demo/local path explicitly. Never touches auth/backend (Requirement 8.6). */
   function enterDemo() { demoActive = true; }
