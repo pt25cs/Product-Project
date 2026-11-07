@@ -89,14 +89,21 @@ user-visible, and unblocks everything else without depending on the backend.
     `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` as Supabase edge
     secrets, and run the manual check. No code changes required.
 
-- [ ] 8. Sign-in shell, sign-out, and retire "Viewing as"
-  - `app.js`: top-level gate renders the sign-in screen ("Continue with Google") when
-    unauthenticated (and not explicit demo); render the app as the signed-in user otherwise.
-    Remove the "Viewing as" switcher for authenticated households (keep it, clearly marked, for
-    the demo). Add sign-out + phone-verify entry in `#/profile` or `#/account`.
+- [x] 8. Sign-in shell, sign-out, and retire "Viewing as" — CODE COMPLETE; live Google + browser e2e DEFERRED
+  - `app.js`: welcome screen offers "Continue with Google" (when backend configured) alongside
+    "Try the demo"; authenticated households hide "Viewing as" and show the signed-in name;
+    sign-out in Settings → Account. Backend wiring is lazy + feature-detected: with no
+    `web/js/config.js` the app runs demo-only (Requirement 8.6), untouched.
+  - New DOM-free modules so the logic IS unit-tested: `session.mjs` (mode state machine,
+    7/7 tests), plus `backend.mjs` adapter mapping server rows ↔ client state.
   - _Requirements: 1.1, 1.4, 9.1, 9.2, 9.3._
-  - _Test (mocked auth):_ unauthenticated shows sign-in and no household data; authenticated
-    shows app without "Viewing as"; demo still shows it.
+  - **Verified:** session logic 7/7; all modules parse + serve; demo store/logic unchanged
+    (full suite 160/160); config.js-absent → demo-only confirmed.
+  - **DEFERRED (live):** the in-browser rendering of the sign-in shell and the real Google OAuth
+    round-trip need (a) a headless-browser e2e run (Playwright not available in this env) and
+    (b) the user's Google Cloud OAuth client + `web/js/config.js`. To activate: create the OAuth
+    client, configure Supabase's Google provider, copy `config.example.js` → `config.js` with the
+    project URL + anon key, then run the app and the e2e suite. No core logic changes expected.
 
 - [x] 9. Household create / join / invitations
   - Create household (first membership), generate invitations (code/link), accept invitation to

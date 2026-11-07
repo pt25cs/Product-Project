@@ -1,7 +1,8 @@
 import * as L from './logic.js';
-import { createStore, STARTER_CHORES } from './store.js';
+import { createStore, STARTER_CHORES, STORAGE_KEY } from './store.js';
 import { $, $$, esc, plural, ic, toast, field, input, select, segmented, checkGroup, openModal, closeModal, initModal, confirmDialog, showErrors, formData, menu, initMenus } from './ui.js';
 import { showCoachmark, endCoachmark, coachSeen, markCoachSeen, resetCoachmarks } from './tour.js';
+import { createSession } from './session.mjs';
 
 // ---------- boot ----------
 let storage;
@@ -9,8 +10,51 @@ try { storage = window.localStorage; storage.getItem('roomsync.probe'); } catch 
   const m = new Map(); // storage blocked: keep working in memory (the store reports save failures)
   storage = { getItem: (k) => m.get(k) ?? null, setItem: () => { throw new Error('Storage unavailable'); }, removeItem: (k) => m.delete(k) };
 }
-const store = createStore({ storage });
+
+// Optional backend wiring (Phase 2, authenticated path). If web/js/config.js is absent or blank,
+// the app runs DEMO-ONLY with no backend (Requirement 8.6) — this is the zero-config default.
+// The Supabase client + auth are loaded lazily so the demo path pulls in no network/module deps.
+let auth = null;      // createAuth(...) instance when configured + available
+let backend = null;   // store backend adapter when authenticated
+let store = createStore({ storage });   // demo/local store by default; replaced if authenticated
 const app = $('#app');
+const hasLocalHousehold = () => { try { return !!storage.getItem(STORAGE_KEY); } catch { return false; } };
+const session = createSession({ get auth() { return auth; }, hasLocalHousehold });
+
+async function tryInitBackend() {
+  let cfg;
+  try { cfg = await import('./config.js'); } catch { return; }   // no config.js -> demo-only
+  if (!cfg || !cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) return;
+  try {
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.119.0');
+    const { createAuth } = await import('./auth.js');
+    const client = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+    auth = createAuth({ client });
+    await auth.init();
+    auth.onChange(() => applyAuthMode());
+    window.__kasaClient = client;   // used by sign-in/migration wiring
+  } catch (e) { auth = null; /* fall back to demo-only on any failure */ }
+}
+
+// Swap the store to the authenticated backend when a session appears; back to local on sign-out.
+async function applyAuthMode() {
+  if (auth && auth.isAuthenticated() && window.__kasaClient) {
+    const { createBackend } = await import('./backend.mjs');
+    backend = createBackend({ client: window.__kasaClient, auth });
+    store = createStore({ storage, backend });
+    store.subscribe(render);
+    window.__roomsync = store;
+    await store.loadRemote();
+    render();
+  } else if (session.mode() !== 'demo') {
+    backend = null;
+    store = createStore({ storage });
+    store.subscribe(render);
+    window.__roomsync = store;
+    store.load();
+    render();
+  }
+}
 
 // Home dropdowns default: chores expanded (primary content), the rest collapsed to keep the home calm.
 const ui = { statsWeek: null, calSel: null, calView: null, open: { chores: true }, welcome: null, handled: null, focusAfter: null };
@@ -422,6 +466,7 @@ function viewSettings() {
   ${disclosure('proto', 'About this prototype', `<ul class="small" style="margin:0;padding-left:18px"><li>Data is saved in this browser on this device. It doesn’t sync to other devices.</li><li>There are no accounts or invite codes. “Viewing as” switches between the roommates stored here.</li><li>Notifications are in-app only.</li><li>Repayments update Kasa’s records. Kasa never moves money.</li></ul>`)}
   ${sec('guide', 'Getting started', `<p class="small" style="padding-top:12px">New here, or showing someone else around? Show the getting-started tips again — each tab’s quick tip reappears the next time you open it.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="replay-tour">${ic('info', 16)}Show the getting-started tips again</button></p>`)}
   ${sec('res', 'Research tools', `<p class="small" style="padding-top:12px">Kasa logs basic usage events on this device only (household created, chores assigned and completed, expenses, purchases, calendar events, tutorial progress). Nothing is uploaded. ${plural(s.analytics.length, 'event')} recorded.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="export">Download events (JSON)</button></p>`)}
+  ${session.mode() === 'authenticated' ? sec('account', 'Account', `<p class="small" style="padding-top:12px">Signed in${store.me ? ` as ${esc(name(store.me()))}` : ''}. Your profile syncs to your account.</p><p style="margin-top:12px"><button type="button" class="btn" data-action="sign-out">Sign out</button></p>`) : ''}
   ${sec('danger', 'Danger zone', `<p class="small" style="padding-top:12px">${s.mode === 'demo' ? 'Resets the demo and returns to the welcome screen.' : 'Permanently deletes this household’s data from this browser.'}</p><p style="margin-top:12px"><button type="button" class="btn danger-outline" data-action="reset">${s.mode === 'demo' ? 'Reset demo' : 'Delete all data'}</button></p>`, { danger: true })}`;
 }
 
@@ -431,7 +476,9 @@ function viewWelcome() {
   const create = ui.welcome === 'create';
   return `<main id="main" class="welcome" tabindex="-1"><div><span class="logo">${ic('home', 22)}</span></div>
   <div><h1>Know what needs to happen, without chasing your roommates.</h1><p class="lead">Chores, shared expenses, shopping and plans in one place.</p></div>
-  <div class="choices"><button type="button" class="choice primary" data-action="start-demo"><span><strong>Try the demo</strong><span class="d">Four sample roommates, ready to explore</span></span></button>
+  <div class="choices">
+  ${session.canSignIn() ? `<button type="button" class="choice primary" data-action="sign-in-google"><span><strong>Continue with Google</strong><span class="d">Sign in to sync your profile across devices</span></span></button>` : ''}
+  <button type="button" class="choice${session.canSignIn() ? '' : ' primary'}" data-action="start-demo"><span><strong>Try the demo</strong><span class="d">Four sample roommates, no sign-in — stays on this device</span></span></button>
   ${create ? '' : `<button type="button" class="choice" data-action="show-create"><span><strong>Create your household</strong><span class="d">Name your place and add your roommates</span></span></button>`}</div>
   ${create ? `<section class="create-form" aria-labelledby="h-create"><div class="sec-head" style="border:0"><h2 id="h-create">Create your household</h2><button type="button" class="btn quiet sm" data-action="hide-create">Cancel</button></div>
     <form data-inline="create" novalidate><div class="form-alert" id="form-alert" role="alert" hidden></div>
@@ -671,7 +718,9 @@ function viewEvent(id) {
 // ---------- actions ----------
 const byId = (list, id) => list.find((x) => x.id === id);
 const actions = {
-  'start-demo': () => { store.startDemo(); ui.welcome = null; location.hash = '#/home'; toast('Demo ready. You’re viewing as Maya.'); },
+  'start-demo': () => { session.enterDemo(); store.startDemo(); ui.welcome = null; location.hash = '#/home'; toast('Demo ready. You’re viewing as Maya.'); },
+  'sign-in-google': async () => { if (!auth) return; const res = await auth.signInWithGoogle(window.location.origin); if (!res.ok) toast(res.error); },
+  'sign-out': async () => { if (!auth) return; await auth.signOut(); session.exitDemo(); location.hash = '#/home'; await applyAuthMode(); toast('Signed out.'); },
   'show-create': () => { ui.welcome = 'create'; render(); $('#f-userName')?.focus(); },
   'hide-create': () => { ui.welcome = null; render(); },
   'add-roommate': (d, el) => { const box = $('#others'); const n = box.children.length + 1; if (n > 4) return; box.insertAdjacentHTML('beforeend', roommateRow(n)); $$('input', box).at(-1).focus(); if (n >= 4) el.disabled = true; },
@@ -815,10 +864,12 @@ function render() {
   const modeName = s.mode === 'demo' ? 'Demo' : 'Local';
   // Phones: the roommate switcher lives inside the demo controls so the header stays quiet; the chip still names who you are viewing as.
   const status = `<div class="statusbar"><details class="status"><summary>${ic('info', 14)}<span class="dot" aria-hidden="true"></span>${isNarrow ? `${modeName} · Viewing as ${esc(name(s.currentUserId))}` : `${modeName} · Saved on this device`}</summary><div class="panel"><strong style="color:var(--color-text)">${s.mode === 'demo' ? 'Demo household' : 'Local household'} · ${esc(s.household.name)}</strong>
-    ${isNarrow ? `<div class="panel-viewer">${viewerSelect('Viewing as')}<p class="hint">Preview each roommate’s view. This isn’t a login.</p></div>` : ''}
+    ${isNarrow && session.showViewingAs() ? `<div class="panel-viewer">${viewerSelect('Viewing as')}<p class="hint">Preview each roommate’s view. This isn’t a login.</p></div>` : ''}
     <ul><li>Saved on this device only. It doesn’t sync to other devices.</li><li>${isNarrow ? 'Switching roommates previews their chores and balance.' : '“Viewing as” previews each roommate. There are no accounts yet.'}</li><li>Notifications show inside Kasa only.</li></ul></div></details></div>`;
   const sidebar = `<aside class="sidebar" aria-label="Sidebar"><div class="side-head">${household}</div>
-    <div class="side-viewer"><label for="switch-user">Viewing as</label><div class="side-tools"><select id="switch-user" data-change="switch-user">${s.members.map((m) => `<option value="${m.id}"${m.id === s.currentUserId ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>${bell}${gear}</div></div>
+    <div class="side-viewer">${session.showViewingAs()
+      ? `<label for="switch-user">Viewing as</label><div class="side-tools"><select id="switch-user" data-change="switch-user">${s.members.map((m) => `<option value="${m.id}"${m.id === s.currentUserId ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>${bell}${gear}</div>`
+      : `<span class="signed-in-as">${esc(name(store.me()))}</span><div class="side-tools">${bell}${gear}</div>`}</div>
     ${menu({ id: 'add-side', label: 'Add to household', icon: 'plus', text: 'Add', cls: 'nav-add', items: ADD_ITEMS })}
     <nav aria-label="Primary">${navLinks(true)}</nav><div class="side-foot">${status}</div></aside>`;
   const topbar = `<header class="topbar">${household}${bell}${gear}</header>`;
@@ -870,9 +921,14 @@ initMenus();
 const res = store.load();
 if (!res.ok) loadError = res.error;
 store.subscribe(render);
-window.addEventListener('storage', (e) => { if (e.key === 'roomsync.v1') { store.load(); render(); } });
+window.addEventListener('storage', (e) => { if (e.key === 'roomsync.v1' && !backend) { store.load(); render(); } });
 setInterval(() => { if (store.state) store.runReminders(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && store.state) store.runReminders(); });
 if (store.state) store.runReminders();
 render();
-window.__roomsync = store; // handy for debugging and automated checks
+window.__roomsync = store; // handy for debugging and automated checks (updated on store swap)
+
+// Phase 2: attempt backend init AFTER the local/demo app is already interactive, so the demo
+// path is never blocked or delayed by network/module loading (Requirement 8.5/8.6). If auth is
+// configured and a session exists, applyAuthMode() swaps in the authenticated store.
+tryInitBackend().then(() => { if (auth && auth.isAuthenticated()) return applyAuthMode(); render(); });

@@ -13,3 +13,8 @@ CLI access token.txt
 # Supabase local CLI state
 supabase/.temp/
 supabase/.branches/
+
+# Browser runtime config (holds publishable Supabase URL/anon key); use config.example.js as template
+web/js/config.js
+# Local Supabase edge-function env
+supabase/functions/.env
