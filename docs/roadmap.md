@@ -50,7 +50,7 @@ push/SMS toggles present but inert) so Phase 3 has a seam.
 
 ---
 
-## Phase 2 — Accounts and identity synced to email + phone _(next)_
+## Phase 2 — Accounts and identity synced to email + phone _(implemented; live-verified except SMS)_
 
 **Goal:** real authenticated users; supersede the Phase 1 local profile scaffolding.
 
@@ -69,6 +69,15 @@ history). Auth provider for Google sign-in; phone verification provider.
 
 **Exit criteria:** a roommate can sign in on two devices and see the same profile; phone
 number is verified and stored; local-to-account migration works.
+
+**Status (implemented):** Google sign-in, server-backed profiles, household create/join/invite,
+and local→account migration are built and **live-verified** against the Supabase project
+(sign-in, create, and import confirmed writing to the production DB). Profiles are server-backed
+so the two-device check holds. Phone verification is **code-complete but the live SMS check is
+deferred** (Twilio gates Verify Service creation behind a paid upgrade; phone verification is
+non-blocking in Phase 2, so this does not block the phase). See the spec at
+`.kiro/specs/accounts-identity-v2/` and `docs/phase-2-setup.md`. Front-end polish items (F1–F3)
+tracked in the spec's tasks.
 
 ---
 

@@ -44,10 +44,33 @@ All colors are semantic CSS tokens at the top of `css/styles.css` (`--color-*`);
 - Notifications: new assignments, due-soon/overdue chore reminders (deduped; cleared when completed), new shared expenses, event changes; read/unread; links to the record; reminder preferences.
 - Validation errors, empty states, save-failure banner, delete confirmation + one-step undo, keyboard-friendly native controls, visible focus, mobile bottom nav / desktop sidebar.
 
+## Two modes: local demo and authenticated accounts (Phase 2)
+
+Kasa now runs in **two modes**, chosen by whether you sign in:
+
+- **Demo / local (default, no setup).** With no `web/js/config.js`, Kasa runs entirely in the
+  browser: `localStorage` (key `roomsync.v1`), the **"Viewing as"** switcher standing in for
+  accounts, and the seeded demo household. No backend, no network, no accounts. This path is
+  permanent — the demo never contacts a server and is never auto-upgraded.
+- **Authenticated (real backend).** With a Supabase backend configured (see
+  `docs/phase-2-setup.md`), the welcome screen offers **Continue with Google**. Signing in gives
+  you a server-backed account: your **profile** (dietary, personal budget, personal rules) and a
+  **verified phone number** are stored server-side and portable across devices; "Viewing as" is
+  retired (you act as yourself). You can **create** a household, **join** one with an invite code,
+  or **import** your existing local demo data into your account (non-destructive, one-time).
+
+Setup for the authenticated path lives in **`docs/phase-2-setup.md`** (Supabase project, Google
+OAuth, schema push, edge functions, config).
+
 ## What is simulated or not supported
-- **No backend, accounts, or sync.** All data is stored in this browser’s `localStorage` (key `roomsync.v1`). Other devices/browsers see nothing. The “Viewing as” switcher is a demo-mode stand-in for separate user accounts; it is not authentication.
-- **Invite links / join codes: not implemented** (they need a server). The welcome screen says so.
-- **Reminders are in-app only**, evaluated while the app is open (on load, every minute, and when the tab regains focus). There is **no background/browser/device push** and no delivery confirmations are shown.
+- **Phone verification: code built and tested, live SMS deferred.** Phone verification works
+  against Twilio Verify but requires a billing-enabled Twilio account to send real texts, so the
+  live SMS step is deferred (phone verification is non-blocking in Phase 2). See the setup guide.
+- **Cross-device sync is identity + profile only (Phase 2).** Real-time sync of the whole
+  household dataset across devices is Phase 5; Phase 2 syncs who-you-are and your profile, and
+  migrates a local household into your account once.
+- **Reminders are in-app only**, evaluated while the app is open. Push/SMS **delivery** of
+  notifications is Phase 3 (the preferences model has the inert channel toggles already).
 - Events: no external calendar sync, no location or presence tracking. Guest events are informational.
 - Not built (out of scope): approvals, payments/Venmo, rules doc, chat, gamification, AI scheduling.
 - Household membership can’t be edited after creation in this version.
@@ -59,9 +82,10 @@ Dates are local `YYYY-MM-DD` (times `YYYY-MM-DDTHH:mm`); timestamps like `doneAt
 ## User-testing support
 Basic events (household created, chore assigned/completed, expense created, shopping purchased, calendar event created) plus completion timestamps are logged **locally**. **Settings → Download events (JSON)** exports them. No metrics are displayed. The research targets (≥80% easier coordination, ≥75% month-one retention, ≥70% on-time chores) are targets, not results; on-time can be computed from `due` vs `completedAt` in the export.
 
-## To make it real later
-- **Real household sharing:** add a backend (e.g. Supabase/Firebase or a small API + Postgres) with auth, `households`/`memberships` tables keyed by household id (row-level security for isolation), invite codes, and replace `localStorage` persistence in `createStore` with API calls; the store’s action functions are the natural seam.
-- **Push notifications:** requires a service worker, Web Push (VAPID keys) with user permission, and a server-side scheduler to fire due/overdue reminders when the app is closed.
+## Backend status (what's built)
+- **Done (Phase 2):** Supabase backend with Google auth, `households`/`memberships`/`profiles`/`invitations` + content tables, row-level security for per-household isolation, invite codes, local→account migration, and a backend-backed persistence seam in `createStore` (the store's action functions are the seam — unchanged on both paths). See `docs/phase-2-setup.md`.
+- **Deferred:** live SMS phone verification (Twilio paid gate; code built).
+- **Later phases:** push + SMS **delivery** (Phase 3), B2B multi-tenancy (Phase 4), full real-time cross-device sync + conflict handling (Phase 5). See `docs/roadmap.md`.
 
 ## Layout
-`index.html` · `css/styles.css` · `js/logic.js` (pure helpers) · `js/store.js` (data + actions) · `js/app.js` (UI) · `tests/` · `serve.mjs`
+`web/index.html` · `web/css/styles.css` · `web/js/logic.js` (pure helpers) · `web/js/store.js` (data + actions, local or backend) · `web/js/app.js` (UI) · `web/js/auth.js` · `web/js/session.mjs` · `web/js/backend.mjs` · `web/js/migrate.mjs` · `web/tests/` · `web/serve.mjs` · `supabase/` (migrations, edge functions, tests)

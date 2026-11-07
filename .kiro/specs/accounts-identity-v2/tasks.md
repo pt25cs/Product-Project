@@ -124,7 +124,7 @@ user-visible, and unblocks everything else without depending on the backend.
     marker prevents re-import; simulated mid-import failure leaves no half-migrated household
     and local data intact; retry is safe.
 
-- [ ] 11. Setup guide and config documentation
+- [x] 11. Setup guide and config documentation
   - `docs/phase-2-setup.md`: create the Google OAuth client (redirect URIs), the Twilio Verify
     service, and the Supabase project; configure providers; fill `.env` from `.env.example`.
     Document the manual live-verification exit check (real sign-in, real SMS, two devices).
