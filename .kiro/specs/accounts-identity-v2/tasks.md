@@ -46,7 +46,7 @@ user-visible, and unblocks everything else without depending on the backend.
   - _Test:_ RLS tests (Supabase local / pgTAP) — a member reads only their household; cannot
     read another; updates only their own profile; `phone_e164` not exposed to others.
 
-- [ ] 4. Build the auth module wrapper (`web/js/auth.js`)
+- [x] 4. Build the auth module wrapper (`web/js/auth.js`)
   - Wrap the Supabase client: `getSession`, `onAuthStateChange`, `signInWithGoogle`,
     `signOut`, session restore + silent refresh, and current-user accessors. Provider-agnostic
     surface so it is mockable.
