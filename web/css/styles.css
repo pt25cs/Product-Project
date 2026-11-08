@@ -172,6 +172,12 @@ input[type=checkbox], input[type=radio] { width: 20px; height: 20px; accent-colo
 .head-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .sec { margin-top: var(--space-6); }
 .sec:first-of-type { margin-top: var(--space-5); }
+/* Profile page: each section is a focused form group, so give them card chrome (per the
+   design system, cards are used for focused groups like forms). This visually separates
+   Account / Your profile / Other roommates instead of one continuous column. */
+.profile-cards .sec { margin-top: var(--space-4); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-surface); padding: var(--space-4); }
+.profile-cards .sec:first-of-type { margin-top: var(--space-4); }
+.profile-cards .sec-head { border-bottom: 1px solid var(--color-border); }
 .sec-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); min-height: 36px; }
 .sec-head h2 { display: flex; align-items: center; gap: 6px; font-size: .9375rem; }
 .sec-head h2.danger { color: var(--color-danger); }

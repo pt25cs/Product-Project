@@ -415,7 +415,23 @@ function viewProfile() {
   const p = m.profile || { dietary: '', budgetCents: null, rules: '' };
   const budgetVal = p.budgetCents != null ? (p.budgetCents / 100).toFixed(2) : '';
   const others = store.state.members.filter((x) => x.id !== me);
-  const banner = `<div class="panel-soft" style="margin-bottom:16px"><p class="small"><strong>${ic('info', 14)}Local only — no account or sync yet</strong></p><p class="hint" style="margin-top:4px">This interim profile is saved in this browser on this device. There are no accounts, no sync, and no privacy guarantee. Real synced profiles come later.</p></div>`;
+  const authed = session.mode() === 'authenticated';
+  const email = authed && auth ? (auth.currentUser() || {}).email : null;
+
+  // F2: Account section (authenticated only) — email + sign out, in its own card.
+  const accountSection = authed
+    ? sec('account-info', 'Account', `<dl class="details" style="padding-top:12px">
+        ${profileField('Signed in as', email || '—')}
+        ${profileField('Phone', (auth.currentUser() || {}).phoneVerified ? 'Verified' : 'Not verified yet')}
+      </dl><p style="margin-top:12px"><button type="button" class="btn" data-action="sign-out">${ic('gear', 16)}Sign out</button></p>`, { icon: 'user' })
+    : '';
+
+  // F3: the interim "local only" banner is correct ONLY on the demo/local path. On an
+  // authenticated account, profiles genuinely sync, so show a positive note instead.
+  const banner = authed
+    ? `<div class="panel-soft" style="margin-bottom:16px"><p class="small"><strong>${ic('info', 14)}Synced to your account</strong></p><p class="hint" style="margin-top:4px">Your profile is saved to your account and loads on any device you sign in to. Only you can edit it; housemates see what's shared.</p></div>`
+    : `<div class="panel-soft" style="margin-bottom:16px"><p class="small"><strong>${ic('info', 14)}Local only — no account or sync yet</strong></p><p class="hint" style="margin-top:4px">This interim profile is saved in this browser on this device. Sign in to get a real synced profile.</p></div>`;
+
   const form = `<form data-inline="profile" novalidate style="padding-top:12px">
     <div class="field"><label for="f-dietary">Dietary restrictions / preferences <span class="opt">(optional)</span></label><textarea id="f-dietary" name="dietary" class="qa-notes" maxlength="300" placeholder="e.g. Vegetarian, no nuts">${esc(p.dietary)}</textarea><p class="field-error" id="err-dietary" hidden></p></div>
     ${field('budgetCents', 'Personal monthly budget (USD)', input('budgetCents', budgetVal, 'inputmode="decimal" placeholder="0.00" autocomplete="off"'), { optional: true, hint: 'Just for you. Kasa shows this as information only and never blocks spending.' })}
@@ -425,7 +441,7 @@ function viewProfile() {
   const othersBlock = others.length
     ? sec('others-profile', 'Other roommates', others.map(otherProfileCard).join(''))
     : '';
-  return `<div class="page-head profile-head"><div><h1>Profile</h1><p class="sub">for ${esc(m.name || 'you')}</p></div></div>${banner}${mine}${othersBlock}`;
+  return `<div class="page-head profile-head"><div><h1>Profile</h1><p class="sub">for ${esc(m.name || 'you')}</p></div></div>${banner}<div class="profile-cards">${accountSection}${mine}${othersBlock}</div>`;
 }
 
 // ---------- Notifications ----------
@@ -504,7 +520,11 @@ function viewWelcome() {
   <div class="choices">
   ${session.canSignIn() ? `<button type="button" class="choice primary" data-action="sign-in-google"><span><strong>Continue with Google</strong><span class="d">Sign in to sync your profile across devices</span></span></button>` : ''}
   <button type="button" class="choice${session.canSignIn() ? '' : ' primary'}" data-action="start-demo"><span><strong>Try the demo</strong><span class="d">Four sample roommates, no sign-in — stays on this device</span></span></button>
-  ${create ? '' : `<button type="button" class="choice" data-action="show-create"><span><strong>Create your household</strong><span class="d">Name your place and add your roommates</span></span></button>`}</div>
+  ${session.canSignIn()
+    // Backend configured: real (synced) households are created by signing in, not locally.
+    // The local "Create your household" choice is only offered on pure-demo/offline deploys.
+    ? ''
+    : (create ? '' : `<button type="button" class="choice" data-action="show-create"><span><strong>Create your household</strong><span class="d">Name your place and add your roommates</span></span></button>`)}</div>
   ${create ? `<section class="create-form" aria-labelledby="h-create"><div class="sec-head" style="border:0"><h2 id="h-create">Create your household</h2><button type="button" class="btn quiet sm" data-action="hide-create">Cancel</button></div>
     <form data-inline="create" novalidate><div class="form-alert" id="form-alert" role="alert" hidden></div>
     ${field('userName', 'Your name', input('userName', '', 'autocomplete="given-name" maxlength="30"'))}
