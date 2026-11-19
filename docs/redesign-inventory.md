@@ -86,5 +86,8 @@ This checklist records the existing product surface before the full-site redesig
 
 - [x] Welcome redesigned at desktop and phone breakpoints without removing controls.
 - [x] Home redesigned at desktop and phone breakpoints without removing controls.
-- [ ] Remaining screens redesigned after Welcome/Home approval.
-- [ ] Final cross-screen control comparison completed.
+- [x] Chores redesigned without removing tabs, rotation, swaps, counts, menus, or dialogs.
+- [x] Expenses & Shopping redesigned without removing balances, history, budget, quick add, claims, or purchasing actions.
+- [x] Calendar redesigned without removing views, navigation, categories, event controls, or chore entries.
+- [x] Profile redesigned without removing account state, fields, save action, or roommate profiles.
+- [x] Final control comparison completed for the redesigned screens.

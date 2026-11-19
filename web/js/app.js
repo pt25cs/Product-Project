@@ -107,8 +107,11 @@ const name = (id) => store.nameOf(id);
 const who = (id) => (id === store.me() ? 'You' : name(id));
 const money = L.fmtMoney;
 const today = () => store.today();
-const avatar = (id) => `<span class="avatar" aria-hidden="true">${esc((name(id) || '?')[0])}</span>`;
-const empty = (title, text, action = '') => `<div class="empty"><strong>${esc(title)}</strong>${esc(text)}${action}</div>`;
+const avatar = (id) => {
+  const tone = [...String(id || '')].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 4;
+  return `<span class="avatar tone-${tone}" aria-hidden="true">${esc((name(id) || '?')[0])}</span>`;
+};
+const empty = (title, text, action = '') => `<div class="empty"><span class="empty-art" aria-hidden="true">${ic('home', 24)}</span><div><strong>${esc(title)}</strong><span>${esc(text)}</span>${action}</div></div>`;
 const sec = (id, title, body, { count, danger, icon, right = '', cls = '' } = {}) => `<section class="sec${cls ? ` ${cls}` : ''}" aria-labelledby="h-${id}"><div class="sec-head"><h2 id="h-${id}" class="${danger ? 'danger' : ''}">${icon ? ic(icon, 15) : ''}${esc(title)}${count != null ? `<span class="count">${count}</span>` : ''}</h2>${right}</div><div class="sec-body">${body}</div></section>`;
 // Clean vector recreation of the selected Round table logo: salmon circle, white K/roof and wordmark.
 const logoMark = (size = 28) => `<img class="logo-mark" src="assets/kasa-logo.svg" width="${Math.round(size * 3.44)}" height="${size}" alt="Kasa">`;
@@ -357,8 +360,9 @@ function viewChores(tab) {
     addBtn = `<div class="add-wrap">${addRow('add-chore', 'Add chore')}</div>`;
   }
   const tabs = [['mine', 'Mine'], ['all', 'All chores'], ['done', 'Completed']];
-  return `<div class="page-head"><h1>Chores</h1></div>
-  <nav class="tabs" aria-label="Chore views">${tabs.map(([k, l]) => `<a href="#/chores/${k}"${tab === k ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav><div class="cards">${swapRequestsSection()}${body}</div>${addBtn}<div class="cards">${disclosure('stats', 'Weekly counts by roommate', statsBody)}</div>`;
+  const mine = store.sel.mine(), overdue = mine.filter((o) => o.due < today()).length;
+  return `<div class="feature-page chores-page"><header class="feature-head chores-head"><span class="feature-head-icon">${ic('chores', 26)}</span><div><p class="eyebrow">Shared rhythm</p><h1>Chores</h1><p>Clear turns, calm reminders, and a record of what’s already handled.</p></div><div class="head-metrics"><span><strong>${mine.length}</strong> yours open</span><span class="${overdue ? 'metric-alert' : ''}"><strong>${overdue}</strong> overdue</span></div></header>
+  <nav class="tabs page-tabs" aria-label="Chore views">${tabs.map(([k, l]) => `<a href="#/chores/${k}"${tab === k ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav><div class="cards">${swapRequestsSection()}${body}</div>${addBtn}<div class="cards secondary-cards">${disclosure('stats', 'Weekly counts by roommate', statsBody)}</div></div>`;
 }
 
 // ---------- Expenses & shopping ----------
@@ -378,12 +382,12 @@ function viewMoney(tab) {
     };
     const histRow = (i) => `<li class="row row-wrap" id="item-${i.id}"><div class="row-lead"><span class="box done" aria-hidden="true">${ic('check', 14)}</span></div><div class="row-main"><div class="row-title done">${esc(i.name)} <span style="font-weight:400">× ${esc(i.qty)}</span></div><div class="row-meta"><span>Purchased by ${esc(who(i.purchasedBy))} · ${L.fmtStamp(i.purchasedAt)}</span></div></div>
       <div class="row-side">${i.expenseId ? navBtn(`#/money/expenses?id=${i.expenseId}`, 'See expense') : ''}<button type="button" class="btn sm" data-action="add-again" data-id="${i.id}" aria-label="Add ${esc(i.name)} again">${ic('plus', 14)}Add again</button>${i.expenseId ? '' : `<button type="button" class="btn sm" data-action="reopen-item" data-id="${i.id}" aria-label="Move ${esc(i.name)} back to needed">${ic('undo', 14)}Undo</button>`}</div></li>`;
-    return `<div class="page-head"><h1>Expenses &amp; shopping</h1></div>${tabsNav}
-      <form data-inline="add-item" class="quick-add" novalidate><div class="grow"><label class="sr-only" for="qa-name">Add an item</label><input type="text" id="qa-name" name="name" placeholder="Add an item" maxlength="60" autocomplete="off"><p class="field-error" id="qa-err" role="alert" hidden></p></div>
+    return `<div class="feature-page money-page shopping-page"><header class="feature-head money-head"><span class="feature-head-icon">${ic('cart', 26)}</span><div><p class="eyebrow">Shared shopping</p><h1>Expenses &amp; shopping</h1><p>Keep the household list useful without turning it into another group chat.</p></div><div class="head-metrics"><span><strong>${needed.length}</strong> needed</span><span><strong>${bought.length}</strong> purchased</span></div></header>${tabsNav}
+      <form data-inline="add-item" class="quick-add quick-add-card" novalidate><div class="grow"><label class="sr-only" for="qa-name">Add an item</label><input type="text" id="qa-name" name="name" placeholder="Add an item" maxlength="60" autocomplete="off"><p class="field-error" id="qa-err" role="alert" hidden></p></div>
         <div class="qty"><label class="sr-only" for="qa-qty">Quantity</label><input type="text" id="qa-qty" name="qty" placeholder="Qty" maxlength="20" autocomplete="off"></div><button type="submit" class="btn primary">Add</button></form>
       ${shoppingHint()}
       <div class="cards">${sec('need', 'Needed', needed.length ? `<ul class="list cardlist">${needed.map(row).join('')}</ul>` : empty('Nothing needed right now', 'Type above to add something the apartment is running low on.'), { count: needed.length, icon: 'cart' })}
-      ${disclosure('bought', `Purchased <span class="count">${bought.length}</span>`, bought.length ? `<ul class="list cardlist">${bought.map(histRow).join('')}</ul>` : empty('Nothing purchased yet', 'Purchased items are kept here so you can add them again.'))}</div>`;
+      ${disclosure('bought', `Purchased <span class="count">${bought.length}</span>`, bought.length ? `<ul class="list cardlist">${bought.map(histRow).join('')}</ul>` : empty('Nothing purchased yet', 'Purchased items are kept here so you can add them again.'))}</div></div>`;
   }
   const s = store.state, me = store.me(), bal = store.sel.balances();
   const owesSomeone = store.sel.settlements().some((x) => x.from === me); // the balance panel already offers a prefilled repayment
@@ -401,11 +405,12 @@ function viewMoney(tab) {
     <div class="row-side"><div class="amount">${money(r.amountCents)}</div>${menu({ id: `r-${r.id}`, label: 'More actions for repayment', items: [{ label: 'Delete repayment', icon: 'trash', action: 'delete-reimb', data: { id: r.id }, danger: true }] })}</div></li>`;
   const balances = `<table><caption class="sr-only">Net balance by roommate</caption><thead><tr><th scope="col">Roommate</th><th scope="col" class="num">Balance</th></tr></thead><tbody>${s.members.map((m) => `<tr><th scope="row">${avatar(m.id)} ${esc(m.name)}${m.id === me ? ' (you)' : ''}</th><td class="num">${bal[m.id] > 0 ? `Is owed ${money(bal[m.id])}` : bal[m.id] < 0 ? `Owes ${money(-bal[m.id])}` : 'Settled up'}</td></tr>`).join('')}</tbody></table>`;
   const histActions = `<div class="btn-row"><button type="button" class="btn primary" data-action="add-expense">${ic('plus', 18)}Add expense</button>${owesSomeone ? '' : `<button type="button" class="btn" data-action="add-reimb">${ic('repeatSm', 18)}Record repayment</button>`}</div>`;
-  return `<div class="page-head"><h1>Expenses &amp; shopping</h1></div>${tabsNav}
+  const myBal = bal[me] || 0;
+  return `<div class="feature-page money-page expenses-page"><header class="feature-head money-head"><span class="feature-head-icon">${ic('money', 26)}</span><div><p class="eyebrow">Shared money, clearly</p><h1>Expenses &amp; shopping</h1><p>See the household balance at a glance, then open the detail only when you need it.</p></div><div class="head-metrics"><span><strong>${myBal === 0 ? 'Even' : money(Math.abs(myBal))}</strong> ${myBal < 0 ? 'you owe' : myBal > 0 ? 'owed to you' : 'settled'}</span><span><strong>${hist.length}</strong> records</span></div></header>${tabsNav}
     <div class="cards">${sec('bal', 'Your balance', balanceBlock({ full: true }), { icon: 'money' })}
     ${sec('hist', 'Expenses and repayments', (hist.length ? `<ul class="list cardlist">${hist.map((h) => (h.k === 'e' ? expRow(h.v) : reRow(h.v))).join('')}</ul>` : empty('No expenses yet', 'Add the first shared expense, like utilities or groceries.')) + histActions, { icon: 'list' })}
     ${budgetCard()}
-    ${disclosure('balances', 'Everyone’s balance', balances)}</div>`;
+    ${disclosure('balances', 'Everyone’s balance', balances)}</div></div>`;
 }
 
 // ---------- Calendar ----------
@@ -471,7 +476,8 @@ function viewCalendar() {
     const anchor = `<div class="ag-anchor"><span>Next 14 days · From <strong>${L.fmtMonthDay(sel)}</strong>${sel === t ? ' (today)' : ''}</span>${sel !== t ? '<button type="button" class="btn quiet sm" data-action="cal-today">Back to today</button>' : ''}<details class="inline" data-key="aghelp"${ui.open.aghelp ? ' open' : ''}><summary>How this works</summary><p>The agenda starts on the day you pick in the strip above and lists the next 14 days. Days with nothing planned are skipped.</p></details></div>`;
     body = `${strip}${anchor}${any ? rows : rows + empty('Nothing on the calendar', 'Add quiet time, guests, an away day or a household plan.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>')}`;
   }
-  return `<div class="page-head"><h1>Calendar</h1></div>${bar}${body}<div class="legend" aria-label="Legend">${Object.keys(L.CATEGORIES).map(catPill).join('')}<span class="cat-pill" style="background:var(--color-surface-subtle);color:var(--color-text-secondary)">${ic('chores', 14)}Chore</span></div>`;
+  const upcomingCount = store.sel.upcomingEvents(14).length;
+  return `<div class="feature-page calendar-page"><header class="feature-head calendar-head"><span class="feature-head-icon">${ic('calendar', 26)}</span><div><p class="eyebrow">Everyone on the same page</p><h1>Calendar</h1><p>Plans, quiet time, guests, away days and chores—without the calendar noise.</p></div><div class="head-metrics"><span><strong>${upcomingCount}</strong> next 14 days</span></div></header><div class="calendar-surface">${bar}${body}<div class="legend" aria-label="Legend">${Object.keys(L.CATEGORIES).map(catPill).join('')}<span class="cat-pill" style="background:var(--color-surface-subtle);color:var(--color-text-secondary)">${ic('chores', 14)}Chore</span></div></div></div>`;
 }
 
 // ---------- Profile (Requirement 5) ----------
@@ -515,7 +521,7 @@ function viewProfile() {
   const othersBlock = others.length
     ? sec('others-profile', 'Other roommates', others.map(otherProfileCard).join(''))
     : '';
-  return `<div class="page-head profile-head"><div><h1>Profile</h1><p class="sub">for ${esc(m.name || 'you')}</p></div></div>${banner}<div class="profile-cards">${accountSection}${mine}${othersBlock}</div>`;
+  return `<div class="feature-page profile-page"><header class="profile-hero"><span class="profile-avatar" aria-hidden="true">${esc((m.name || '?')[0])}</span><div><p class="eyebrow">Your place in the household</p><h1>${esc(m.name || 'Your profile')}</h1><p>Keep the details your roommates should know in one respectful, easy-to-scan place.</p></div><span class="profile-mode">${ic(authed ? 'check' : 'info', 15)}${authed ? 'Account synced' : 'Saved locally'}</span></header>${banner}<div class="profile-cards">${accountSection}${mine}${othersBlock}</div></div>`;
 }
 
 // ---------- Notifications ----------
@@ -1054,7 +1060,7 @@ function render() {
   app.innerHTML = `<div class="shell">${isNarrow ? '' : sidebar}
     <div class="main-col">${isNarrow ? topbar : ''}
       ${store.saveError ? `<div class="banner-error" role="alert">Couldn’t save to this browser (storage may be full or blocked). Recent changes will be lost if you close or refresh this page.</div>` : ''}
-      <main id="main" tabindex="-1" class="${key === 'home' || key === 'calendar' ? 'wide' : ''}">${isNarrow ? status : ''}${page}</main></div>
+      <main id="main" tabindex="-1" class="${['home', 'chores', 'money', 'calendar', 'profile'].includes(key) ? 'wide' : ''}">${isNarrow ? status : ''}${page}</main></div>
     ${isNarrow ? `<nav class="bottomnav" aria-label="Primary">${mobileNav}</nav>` : ''}</div>`;
   document.title = `${TITLES[key]} · Kasa`;
   afterRender(route, sig);
