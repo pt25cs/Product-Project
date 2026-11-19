@@ -7,3 +7,8 @@
 // git-ignored.
 export const SUPABASE_URL = '';      // e.g. https://buwnxnhyxtzrkahkdkct.supabase.co
 export const SUPABASE_ANON_KEY = ''; // the anon / publishable key
+
+// Dummy sign-in (default when this file is absent or the values above are blank): "Continue with
+// Google" signs you in as a dummy user, with no Supabase project and no network. Household
+// data is kept in this browser's localStorage. Set to false for a demo-only build with no sign-in.
+// export const MOCK_AUTH = false;
