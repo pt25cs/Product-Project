@@ -110,9 +110,8 @@ const today = () => store.today();
 const avatar = (id) => `<span class="avatar" aria-hidden="true">${esc((name(id) || '?')[0])}</span>`;
 const empty = (title, text, action = '') => `<div class="empty"><strong>${esc(title)}</strong>${esc(text)}${action}</div>`;
 const sec = (id, title, body, { count, danger, icon, right = '', cls = '' } = {}) => `<section class="sec${cls ? ` ${cls}` : ''}" aria-labelledby="h-${id}"><div class="sec-head"><h2 id="h-${id}" class="${danger ? 'danger' : ''}">${icon ? ic(icon, 15) : ''}${esc(title)}${count != null ? `<span class="count">${count}</span>` : ''}</h2>${right}</div><div class="sec-body">${body}</div></section>`;
-// Kasa mark (logo D, "Round table"): salmon circle, white K whose arm forms a roof. Recreated as inline SVG
-// from the design board; replace with the official asset when available.
-const logoMark = (size = 28) => `<svg class="logo-mark" width="${size}" height="${size}" viewBox="0 0 64 64" role="img" aria-label="Kasa"><circle cx="32" cy="32" r="32" fill="var(--color-accent)"/><g fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 20v24M23 35l11-11M30 38l12-12 12 12"/></g></svg>`;
+// Official Round table logo, cropped from the supplied brand-board image without redrawing it.
+const logoMark = (size = 28) => `<img class="logo-mark" src="assets/kasa-round-table-logo.png" width="${Math.round(size * 2.32)}" height="${size}" alt="Kasa">`;
 const navBtn = (href, label) => `<a class="btn sm nav" href="${href}">${label}${ic('chevR', 14)}</a>`;
 const counter = (id, len, max) => `<p class="counter" id="count-${id}" aria-hidden="true">${len} / ${max}</p>`;
 const addRow = (action, label, extra = '') => `<button type="button" class="add-row" data-action="${action}" ${extra}><span class="plus">${ic('plus', 18)}</span>${esc(label)}</button>`;
@@ -275,6 +274,16 @@ function viewHome() {
   const needed = store.sel.needed();
   const events = store.sel.upcomingEvents(14);
   const feed = s.activity.slice(0, 5);
+  const balance = store.sel.balances()[me] || 0;
+  const todayAll = s.occurrences.filter((o) => o.assigneeId === me && o.due === t);
+  const todayDone = todayAll.filter((o) => o.doneAt).length;
+  const todayTotal = todayAll.length;
+  const progress = todayTotal ? Math.round((todayDone / todayTotal) * 100) : 100;
+  const summary = overdueMine.length
+    ? `${plural(overdueMine.length, 'chore')} need${overdueMine.length === 1 ? 's' : ''} your attention.`
+    : dueToday.length
+      ? `${plural(dueToday.length, 'chore')} left for today.`
+      : 'You’re all caught up for today.';
   const list = (arr) => `<ul class="list">${arr.map((o) => choreRow(o, { ctx: 'h' })).join('')}</ul>`;
   const todayBody = dueToday.length ? list(dueToday)
     : `<div class="empty"><strong>${ic('check', 16)} You’re all caught up today</strong>${upcomingAll.length ? `Next up: ${esc(upcomingAll[0].title)}, ${L.fmtDay(upcomingAll[0].due)}.` : 'Nothing is assigned to you right now.'}</div>`;
@@ -290,7 +299,19 @@ function viewHome() {
     <div data-o="5">${disclosure('shopping', 'Shopping list', needed.length ? `<ul class="list">${needed.slice(0, PREVIEW).map(shopRowCompact).join('')}</ul>${moreText(needed.length, PREVIEW, 'needed')}` : empty('Nothing needed', 'Add something when the apartment runs low.', '<br><button type="button" class="btn sm" data-action="add-item">Add item</button>'), { count: needed.length || null, right: navBtn('#/money/shopping', 'Open list') })}</div>
     <div data-o="6">${expectationsCard()}</div>
     <div data-o="7">${purchasingRulesCard()}</div>`;
-  return `<div class="page-head"><div><h1>Today</h1><p class="sub">${greet}, ${esc(name(me))} · ${L.fmtDay(t)}</p></div></div><div class="dash"><div class="dash-col">${mainCol}</div><div class="dash-col">${sideCol}</div></div>`;
+  const balanceText = balance === 0 ? 'Settled up' : balance < 0 ? `You owe ${money(-balance)}` : `Owed ${money(balance)}`;
+  return `<section class="home-hero" aria-labelledby="home-title">
+    <div class="home-hero-copy"><p class="eyebrow">${greet}</p><h1 id="home-title">${esc(name(me))}, here’s home today.</h1><p>${esc(summary)} Everything else is right where your household left it.</p></div>
+    <div class="home-people" aria-hidden="true"><span>${esc((name(me) || '?')[0])}</span>${s.members.filter((m) => m.id !== me).slice(0, 3).map((m) => `<span>${esc((m.name || '?')[0])}</span>`).join('')}<i>${ic('home', 28)}</i></div>
+  </section>
+  <div class="home-date">${ic('calendar', 16)}<span>${L.fmtDay(t)}</span></div>
+  <section class="home-stats" aria-label="Today at a glance">
+    <article class="home-stat stat-chores"><span class="stat-icon">${ic('chores', 20)}</span><div><span class="stat-label">Your chores</span><strong>${dueToday.length ? `${dueToday.length} due today` : 'All clear today'}</strong></div><div class="mini-progress" role="progressbar" aria-label="Today’s chores completed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><span style="width:${progress}%"></span></div></article>
+    <article class="home-stat stat-balance"><span class="stat-icon">${ic('money', 20)}</span><div><span class="stat-label">Your balance</span><strong>${balanceText}</strong></div><a href="#/money/expenses" aria-label="Open expenses">${ic('chevR', 18)}</a></article>
+    <article class="home-stat stat-plans"><span class="stat-icon">${ic('calendar', 20)}</span><div><span class="stat-label">Coming up</span><strong>${events.length ? plural(events.length, 'plan') : 'Nothing planned'}</strong></div><a href="#/calendar" aria-label="Open calendar">${ic('chevR', 18)}</a></article>
+    <article class="home-stat stat-shopping"><span class="stat-icon">${ic('cart', 20)}</span><div><span class="stat-label">Shopping</span><strong>${needed.length ? `${plural(needed.length, 'item')} needed` : 'List is clear'}</strong></div><a href="#/money/shopping" aria-label="Open shopping list">${ic('chevR', 18)}</a></article>
+  </section>
+  <div class="dash home-dash"><div class="dash-col">${mainCol}</div><div class="dash-col">${sideCol}</div></div>`;
 }
 
 // ---------- Swap requests (Requirement 2 UI) ----------
@@ -564,24 +585,51 @@ function viewSettings() {
 const roommateRow = (i) => `<div class="roommate-row"><input type="text" name="others[]" aria-label="Roommate ${i} name" maxlength="30" placeholder="Roommate ${i}">${i > 1 ? `<button type="button" class="icon-btn" data-action="remove-roommate" aria-label="Remove roommate ${i}">${ic('x')}</button>` : '<span aria-hidden="true"></span>'}</div>`;
 function viewWelcome() {
   const create = ui.welcome === 'create';
-  return `<main id="main" class="welcome" tabindex="-1"><div class="brand-row"><span class="logo">${logoMark(44)}</span><span class="wordmark" aria-hidden="true">Kasa</span></div>
-  <div><h1>Know what needs to happen, without chasing your roommates.</h1><p class="lead">Chores, shared expenses, shopping and plans in one place.</p></div>
-  <div class="choices">
-  ${session.canSignIn() ? `<button type="button" class="choice primary" data-action="sign-in-google"><span><strong>${isMockAuth() ? 'Continue with Google (dummy account)' : 'Continue with Google'}</strong><span class="d">${isMockAuth() ? 'Skips real sign-in: you’re signed in as a dummy user, saved in this browser' : 'Sign in to sync your profile across devices'}</span></span></button>` : ''}
+  const feature = (icon, title, text, visual) => `<article class="welcome-feature"><span class="feature-icon">${ic(icon, 22)}</span><div><h3>${title}</h3><p>${text}</p></div><div class="feature-visual" aria-hidden="true">${visual}</div></article>`;
+  return `<main id="main" class="welcome" tabindex="-1">
+  <header class="welcome-nav"><a class="welcome-logo" href="#" aria-label="Kasa home">${logoMark(54)}</a><span class="prototype-chip">MVP prototype</span></header>
+  <section class="welcome-hero" aria-labelledby="welcome-title">
+    <div class="welcome-copy"><p class="eyebrow">A calmer way to share a home</p><h1 id="welcome-title">Know what needs to happen, without chasing your roommates.</h1><p class="lead">Chores, shared expenses, shopping and plans in one friendly place—so everyone can see what’s next.</p>
+      <div class="choices">
+  ${session.canSignIn() ? `<button type="button" class="choice primary" data-action="sign-in-google"><span class="choice-symbol">${ic('user', 20)}</span><span><strong>Continue with Google${isMockAuth() ? ' <span class="choice-note">(dummy account)</span>' : ''}</strong><span class="d">${isMockAuth() ? 'Skips real sign-in: you’re signed in as a dummy user, saved in this browser' : 'Sign in to sync your profile across devices'}</span></span>${ic('arrowR', 20)}</button>` : ''}
   <button type="button" class="choice${session.canSignIn() ? '' : ' primary'}" data-action="start-demo"><span><strong>Try the demo</strong><span class="d">Four sample roommates, no sign-in — stays on this device</span></span></button>
   ${session.canSignIn()
     // Backend configured: real (synced) households are created by signing in, not locally.
     // The local "Create your household" choice is only offered on pure-demo/offline deploys.
     ? ''
-    : (create ? '' : `<button type="button" class="choice" data-action="show-create"><span><strong>Create your household</strong><span class="d">Name your place and add your roommates</span></span></button>`)}</div>
-  ${create ? `<section class="create-form" aria-labelledby="h-create"><div class="sec-head" style="border:0"><h2 id="h-create">Create your household</h2><button type="button" class="btn quiet sm" data-action="hide-create">Cancel</button></div>
+    : (create ? '' : `<button type="button" class="choice" data-action="show-create"><span><strong>Create your household</strong><span class="d">Name your place and add your roommates</span></span></button>`)}
+      </div>
+      <details class="welcome-saved"><summary>${ic('info', 16)}<span>Saved on this device</span><span class="chev">${ic('chevron', 18)}</span></summary><div><p class="small">This is a prototype. Your household is stored in this browser only: it doesn’t sync to other phones or laptops, and there are no accounts or invite codes yet. Notifications appear inside the app.</p></div></details>
+    </div>
+    <div class="welcome-art" aria-label="A shared home with four roommates">
+      <div class="art-sun"></div><div class="art-cloud cloud-one"></div><div class="art-cloud cloud-two"></div>
+      <div class="art-house"><span class="roof"></span><span class="door"></span><span class="window window-one"></span><span class="window window-two"></span></div>
+      <div class="art-roommates"><span>M</span><span>J</span><span>A</span><span>S</span></div>
+      <div class="art-note">${ic('check', 18)}<span>Trash & recycling<br><strong>Done together</strong></span></div>
+    </div>
+  </section>
+  ${create ? `<section class="create-form welcome-create" aria-labelledby="h-create"><div class="sec-head" style="border:0"><h2 id="h-create">Create your household</h2><button type="button" class="btn quiet sm" data-action="hide-create">Cancel</button></div>
     <form data-inline="create" novalidate><div class="form-alert" id="form-alert" role="alert" hidden></div>
     ${field('userName', 'Your name', input('userName', '', 'autocomplete="given-name" maxlength="30"'))}
     ${field('householdName', 'Household name', input('householdName', '', 'maxlength="40" placeholder="e.g. Elm Street 3B"'))}
     <fieldset id="grp-others"><legend>Roommates</legend><div id="others">${[1, 2].map(roommateRow).join('')}</div><p class="field-error" id="err-others" hidden></p><button type="button" class="btn sm" data-action="add-roommate" id="add-roommate">${ic('plus', 16)}Add roommate</button><p class="hint">Up to 5 people including you.</p></fieldset>
     <fieldset><legend>Starter chores <span class="opt">(optional)</span></legend><div class="checks">${STARTER_CHORES.map((c) => `<label><input type="checkbox" name="starter[]" value="${c.key}"> ${esc(c.title)}</label>`).join('')}</div><p class="hint">Weekly, rotating between everyone.</p></fieldset>
     <button type="submit" class="btn primary" style="width:100%">Create household</button></form></section>` : ''}
-  <details class="disclosure"><summary><span>${ic('info', 16)} Saved on this device</span><span class="chev">${ic('chevron', 18)}</span></summary><div class="disc-body"><p class="small">This is a prototype. Your household is stored in this browser only: it doesn’t sync to other phones or laptops, and there are no accounts or invite codes yet. Notifications appear inside the app.</p></div></details></main>`;
+  <section class="welcome-features" aria-labelledby="features-title"><div class="section-intro"><p class="eyebrow">Everything your household shares</p><h2 id="features-title">One place for the everyday details</h2><p>Each part stays simple on its own, while Home brings the useful bits together.</p></div>
+    <div class="feature-grid">
+      ${feature('chores', 'Chores & rotation', 'See what’s due, whose turn it is and what’s already done.', '<span class="visual-check"></span><span></span><i>M</i>')}
+      ${feature('money', 'Expenses & balances', 'Split shared costs to the cent and see who owes whom.', '<b>$24.80</b><span class="visual-bar"></span>')}
+      ${feature('cart', 'Shopping list', 'Claim what you’ll grab, then turn a purchase into an expense.', '<span class="visual-check checked"></span><span></span><i>J</i>')}
+      ${feature('calendar', 'Shared calendar', 'Keep quiet time, guests, away days and plans easy to scan.', '<em>12</em><em class="active">13</em><em>14</em>')}
+      ${feature('home', 'House rules', 'Keep expectations, budgets, products and store preferences visible.', '<span class="rule-line"></span><span class="rule-line short"></span>')}
+    </div>
+  </section>
+  <section class="welcome-how" aria-labelledby="how-title"><div><p class="eyebrow">How it works</p><h2 id="how-title">Less reminding. More knowing.</h2></div><ol><li><span>1</span><div><strong>Open your household</strong><p>Start with the sample home or set up your own.</p></div></li><li><span>2</span><div><strong>Add what matters</strong><p>Chores, costs, groceries and plans stay shared.</p></div></li><li><span>3</span><div><strong>Check Home</strong><p>See today’s priorities and recent changes at a glance.</p></div></li></ol></section>
+  <section class="welcome-preview" aria-labelledby="preview-title"><div class="section-intro"><p class="eyebrow">A real look inside</p><h2 id="preview-title">Home keeps today clear</h2><p>This preview uses the same information you’ll find in the demo dashboard.</p></div>
+    <div class="dashboard-mock"><div class="mock-side"><span class="mock-brand">${logoMark(34)}</span><b>Round table</b><span class="mock-nav active">${ic('home', 16)}Home</span><span class="mock-nav">${ic('chores', 16)}Chores</span><span class="mock-nav">${ic('money', 16)}Expenses</span><span class="mock-nav">${ic('calendar', 16)}Calendar</span></div><div class="mock-main"><p>Good morning</p><h3>Maya, here’s home today.</h3><div class="mock-stats"><span><b>2</b> chores due</span><span><b>$18.40</b> owed to you</span><span><b>3</b> plans coming up</span></div><div class="mock-cards"><article><strong>Chores</strong><p><i></i>Take out trash</p><p><i></i>Wipe kitchen counters</p></article><article><strong>Household plans</strong><p>Quiet study · 7:00 PM</p><p>Jordan away · Tomorrow</p></article></div></div></div>
+  </section>
+  <footer class="welcome-footer"><span>${logoMark(36)}</span><p>Built for exploring a better way to coordinate a shared home.</p><span>Prototype · Saved locally</span></footer>
+  </main>`;
 }
 function handleInlineForm(form) {
   const kind = form.dataset.inline;
@@ -984,7 +1032,9 @@ function render() {
   }
   const key = TITLES[section] ? section : 'home';
   const unread = store.sel.unread(), s = store.state, isNarrow = narrow();
-  const navLinks = (side) => NAV.map(([k, href, label, icon, short]) => `<a ${side ? 'class="nav"' : ''} href="${href}"${k === key ? ' aria-current="page"' : ''} aria-label="${esc(label)}">${ic(icon, side ? 20 : 22)}<span aria-hidden="true">${side ? label : short}</span></a>`).join('');
+  const navLink = ([k, href, label, icon, short], side) => `<a ${side ? 'class="nav"' : ''} href="${href}"${k === key ? ' aria-current="page"' : ''} aria-label="${esc(label)}">${ic(icon, side ? 20 : 22)}<span aria-hidden="true">${side ? label : short}</span></a>`;
+  const navLinks = (side) => NAV.map((item) => navLink(item, side)).join('');
+  const mobileNav = `${NAV.slice(0, 2).map((item) => navLink(item, false)).join('')}${menu({ id: 'add-fab', label: 'Add', icon: 'plus', cls: 'fab', wrap: 'fab-wrap', items: ADD_ITEMS })}${NAV.slice(2).map((item) => navLink(item, false)).join('')}`;
   const bell = `<a class="icon-link" href="#/notifications" aria-label="Notifications${unread ? `, ${unread} unread` : ''}"${key === 'notifications' ? ' aria-current="page"' : ''}>${ic('bell', 20)}${unread ? `<span class="badge-count" aria-hidden="true">${unread > 9 ? '9+' : unread}</span>` : ''}</a>`;
   const gear = `<a class="icon-link" href="#/settings" aria-label="Settings"${key === 'settings' ? ' aria-current="page"' : ''}>${ic('gear', 20)}</a>`;
   const household = `<a class="household" href="#/home" title="${esc(s.household.name)}" aria-label="${esc(s.household.name)}, home"><span class="logo">${logoMark(28)}</span><span class="t">${esc(s.household.name)}</span></a>`;
@@ -1005,7 +1055,7 @@ function render() {
     <div class="main-col">${isNarrow ? topbar : ''}
       ${store.saveError ? `<div class="banner-error" role="alert">Couldn’t save to this browser (storage may be full or blocked). Recent changes will be lost if you close or refresh this page.</div>` : ''}
       <main id="main" tabindex="-1" class="${key === 'home' || key === 'calendar' ? 'wide' : ''}">${isNarrow ? status : ''}${page}</main></div>
-    ${isNarrow ? `<nav class="bottomnav" aria-label="Primary">${navLinks(false)}${menu({ id: 'add-fab', label: 'Add', icon: 'plus', cls: 'fab', wrap: 'fab-wrap', items: ADD_ITEMS })}</nav>` : ''}</div>`;
+    ${isNarrow ? `<nav class="bottomnav" aria-label="Primary">${mobileNav}</nav>` : ''}</div>`;
   document.title = `${TITLES[key]} · Kasa`;
   afterRender(route, sig);
 }

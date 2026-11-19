@@ -4,7 +4,7 @@ set -euo pipefail
 rm -rf dist
 mkdir -p dist
 cp web/index.html dist/
-cp -R web/css web/js dist/
+cp -R web/assets web/css web/js dist/
 
 [[ -d dist ]] || {
   echo "Expected build output at dist" >&2
