@@ -597,7 +597,7 @@ details.inline.btn-summary[open] > summary .chev { transform: rotate(180deg); }
 }
 .eyebrow { color: var(--color-accent-strong); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .logo-mark { object-fit: contain; }
-.household .logo-mark { width: 65px; height: 28px; }
+.household .logo-mark { width: 65px; height: auto; max-height: 28px; }
 
 /* Welcome page */
 main.welcome { max-width: none; padding: 0; overflow: hidden; background: var(--color-surface); }

@@ -110,8 +110,8 @@ const today = () => store.today();
 const avatar = (id) => `<span class="avatar" aria-hidden="true">${esc((name(id) || '?')[0])}</span>`;
 const empty = (title, text, action = '') => `<div class="empty"><strong>${esc(title)}</strong>${esc(text)}${action}</div>`;
 const sec = (id, title, body, { count, danger, icon, right = '', cls = '' } = {}) => `<section class="sec${cls ? ` ${cls}` : ''}" aria-labelledby="h-${id}"><div class="sec-head"><h2 id="h-${id}" class="${danger ? 'danger' : ''}">${icon ? ic(icon, 15) : ''}${esc(title)}${count != null ? `<span class="count">${count}</span>` : ''}</h2>${right}</div><div class="sec-body">${body}</div></section>`;
-// Official Round table logo, cropped from the supplied brand-board image without redrawing it.
-const logoMark = (size = 28) => `<img class="logo-mark" src="assets/kasa-round-table-logo.png" width="${Math.round(size * 2.32)}" height="${size}" alt="Kasa">`;
+// Clean vector recreation of the selected Round table logo: salmon circle, white K/roof and wordmark.
+const logoMark = (size = 28) => `<img class="logo-mark" src="assets/kasa-logo.svg" width="${Math.round(size * 3.44)}" height="${size}" alt="Kasa">`;
 const navBtn = (href, label) => `<a class="btn sm nav" href="${href}">${label}${ic('chevR', 14)}</a>`;
 const counter = (id, len, max) => `<p class="counter" id="count-${id}" aria-hidden="true">${len} / ${max}</p>`;
 const addRow = (action, label, extra = '') => `<button type="button" class="add-row" data-action="${action}" ${extra}><span class="plus">${ic('plus', 18)}</span>${esc(label)}</button>`;

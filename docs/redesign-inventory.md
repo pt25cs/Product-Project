@@ -11,7 +11,7 @@ This checklist records the existing product surface before the full-site redesig
 
 ## Welcome and account entry
 
-- Round table Kasa logo.
+- Clean vector Round table Kasa logo.
 - Continue with Google / dummy account entry.
 - Try the demo.
 - Create your household (offline mode), cancel, name fields, roommate fields, add/remove roommate, starter chore checkboxes, create action.
