@@ -19,10 +19,11 @@ PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.demo.mjs            # demo 
 PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.chore-details.mjs   # chore details dialog
 PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.refresh.mjs         # quick add, calendar date strip, Add menu, empty states
 PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.refinement.mjs      # Home previews, nav label, mobile header, calendar entry points, copy
+PLAYWRIGHT_MODULE=/path/to/playwright node tests/e2e.frontend-v1.mjs     # Home rules cards, budget card, month calendar, profile boxes, dummy sign-in
 ```
 
 ## Design system
-List-first and quiet, in the spirit of Todoist: a tinted sidebar with a clear selected row and an **Add** entry, a focused white content column with strong page headings, round-check task rows with thin separators and one line of muted metadata, inline "+ Add" rows, and small contextual menus. The calendar borrows Fantastical's date strip over a time-first agenda; shopping borrows AnyList's quick-add field, check-off rows and "add again". One shared palette throughout: white and `#F8FAFC` surfaces, slate text, indigo `#4F46E5` for interaction, semantic green/amber/red always paired with an icon or text.
+List-first and quiet, in the spirit of Todoist: a tinted sidebar with a clear selected row and an **Add** entry, a focused white content column with strong page headings, round-check task rows with thin separators and one line of muted metadata, inline "+ Add" rows, and small contextual menus. The calendar borrows Fantastical's date strip over a time-first agenda; shopping borrows AnyList's quick-add field, check-off rows and "add again". One shared brand palette throughout: **indigo** `#444E94` for interaction, **salmon** `#DB7679` as the brand accent (logo, active-nav marker; fills and marks only because it can't carry text at WCAG contrast, so salmon text uses the darker `--color-accent-strong`), and **white** surfaces on a warm white canvas. Semantic green/amber/red are always paired with an icon or text. The logo is the “Round table” mark (salmon circle, white K whose arm forms a roof); `logoMark()` in `js/app.js` is an inline-SVG recreation to be replaced with the official asset.
 
 All colors are semantic CSS tokens at the top of `css/styles.css` (`--color-*`); `tests/contrast.test.mjs` checks the real token pairs against WCAG contrast ratios. Shared primitives live in `js/ui.js` (icons, dialogs, menus, form fields, toasts). No card chrome around lists; cards are used only for focused groups (the balance panel and forms).
 
@@ -37,10 +38,11 @@ All colors are semantic CSS tokens at the top of `css/styles.css` (`--color-*`);
 
 ## What works
 - Create a household (name, roommates, optional starter chores) or open the seeded demo household.
+- Home: today’s chores, balance, plans, shopping, plus **House expectations** and **Shared purchasing rules** (budget, preferred products, store preferences) as collapsed cards whose summary previews the content. Expenses has a bold **Budget & spending** card with a progress bar and an “Over by / left” status.
 - Chores: create/edit/delete, one-time or weekly, manual (re)assignment, optional round-robin rotation (current & next assignee shown), one-tap complete + undo, completion history with who/when and on-time marker, My / All / Completed views, per-roommate counts for a selected week (not a fairness score).
 - Expenses: equal split among chosen participants in integer cents, edit/delete with recalculated balances, “settle up” suggestions, recorded repayments (**does not move money**), current-month total.
 - Shopping: items with quantity/notes/buyer, claim, purchased history, optional linked expense with price + split participants.
-- Calendar: week view + upcoming list; Away / Quiet-study / Guests / Household plans; creator-only edit/delete; dated chores displayed alongside events (read from chore records, not duplicated).
+- Calendar: month view (default; compact chips on desktop, dots on phones, selected-day panel) + agenda; Away / Quiet-study / Guests / Household plans; creator-only edit/delete; dated chores displayed alongside events (read from chore records, not duplicated).
 - Notifications: new assignments, due-soon/overdue chore reminders (deduped; cleared when completed), new shared expenses, event changes; read/unread; links to the record; reminder preferences.
 - Validation errors, empty states, save-failure banner, delete confirmation + one-step undo, keyboard-friendly native controls, visible focus, mobile bottom nav / desktop sidebar.
 
@@ -59,7 +61,16 @@ Kasa now runs in **two modes**, chosen by whether you sign in:
   retired (you act as yourself). You can **create** a household, **join** one with an invite code,
   or **import** your existing local demo data into your account (non-destructive, one-time).
 
-Setup for the authenticated path lives in **`docs/phase-2-setup.md`** (Supabase project, Google
+**Dummy sign-in (zero-config default).** With no real Supabase values in `web/js/config.js`, the
+welcome screen shows **Continue with Google (dummy account)**. It signs you in as a dummy user
+(`dummy.user@example.com`) with no Google/Supabase account and no network, and the create / join /
+import-household flows work end to end against a fake backend in `web/js/mock-client.mjs`
+(data lives in `localStorage` under `kasa.mock.*`; any invite code joins a sample household;
+`__kasaMock.reset()` in the console wipes it). It exists so the authenticated UI can be built and
+demoed without credentials. It is **not secure and not synced**. Add real values to `config.js` to
+switch to Supabase, or set `export const MOCK_AUTH = false;` there for demo-only.
+
+Setup for the real authenticated path lives in **`docs/phase-2-setup.md`** (Supabase project, Google
 OAuth, schema push, edge functions, config).
 
 ## What is simulated or not supported

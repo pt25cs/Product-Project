@@ -18,10 +18,13 @@ const TEXT = [
   ['color-primary', 'color-surface', 4.5, 'links on cards'], ['color-primary', 'color-bg', 4.5, 'links on canvas'], ['color-primary', 'color-primary-subtle', 4.5, 'selected nav / chips'],
   ['color-success', 'color-success-subtle', 4.5, 'success chip'], ['color-success', 'color-surface', 4.5, 'success text'],
   ['color-warning', 'color-warning-subtle', 4.5, 'warning chip'], ['color-danger', 'color-danger-subtle', 4.5, 'danger chip'], ['color-danger', 'color-surface', 4.5, 'danger text'],
+  ['color-text', 'color-primary-subtle', 4.5, 'text on hovered rows'], ['color-text', 'color-surface-subtle', 4.5, 'text on subtle fills'], ['color-primary', 'color-surface-subtle', 4.5, 'primary on subtle'],
+  ['color-text-secondary', 'color-primary-subtle', 4.5, 'secondary on selected'],
+  ['color-accent-strong', 'color-surface', 4.5, 'salmon text on white'], ['color-accent-strong', 'color-accent-subtle', 4.5, 'salmon text on salmon tint'], ['color-text', 'color-accent-subtle', 4.5, 'text on salmon tint'],
   ['cat-quiet', 'cat-quiet-bg', 4.5, 'quiet event'], ['cat-away', 'cat-away-bg', 4.5, 'away event'], ['cat-guest', 'cat-guest-bg', 4.5, 'guest event'], ['cat-plans', 'cat-plans-bg', 4.5, 'plans event'],
 ];
 // non-text: input / checkbox boundaries and focus ring need 3:1
-const UI = [['color-control-border', 'color-surface', 3, 'input border'], ['color-control-border', 'color-bg', 3, 'control border on canvas'], ['color-focus', 'color-surface', 3, 'focus ring'], ['color-focus', 'color-bg', 3, 'focus ring on canvas'], ['color-primary', 'color-surface', 3, 'indigo accents']];
+const UI = [['color-control-border', 'color-surface', 3, 'input border'], ['color-control-border', 'color-bg', 3, 'control border on canvas'], ['color-focus', 'color-surface', 3, 'focus ring'], ['color-focus', 'color-bg', 3, 'focus ring on canvas'], ['color-primary', 'color-surface', 3, 'indigo accents'], ['color-success', 'color-surface-subtle', 3, 'budget bar fill on track'], ['color-warning', 'color-surface-subtle', 3, 'over-budget bar fill on track'], ['color-control-border', 'color-surface-subtle', 3, 'bar/track outline on subtle']];
 
 for (const [fg, bg, min, what] of [...TEXT, ...UI]) {
   test(`${what}: ${fg} on ${bg} ≥ ${min}:1`, () => {
@@ -31,6 +34,6 @@ for (const [fg, bg, min, what] of [...TEXT, ...UI]) {
   });
 }
 test('required semantic tokens exist', () => {
-  for (const t of ['color-bg', 'color-surface', 'color-text', 'color-text-secondary', 'color-text-muted', 'color-border', 'color-control-border', 'color-primary', 'color-primary-hover', 'color-primary-subtle', 'color-success', 'color-success-subtle', 'color-warning', 'color-warning-subtle', 'color-danger', 'color-danger-subtle', 'color-focus']) assert.ok(tok[t], t);
-  assert.equal(tok['color-bg'], '#F8FAFC'); assert.equal(tok['color-primary'], '#4F46E5'); assert.equal(tok['color-text'], '#0F172A');
+  for (const t of ['color-bg', 'color-surface', 'color-text', 'color-text-secondary', 'color-text-muted', 'color-border', 'color-control-border', 'color-primary', 'color-primary-hover', 'color-primary-subtle', 'color-success', 'color-success-subtle', 'color-warning', 'color-warning-subtle', 'color-danger', 'color-danger-subtle', 'color-focus', 'color-accent', 'color-accent-subtle', 'color-accent-strong']) assert.ok(tok[t], t);
+  assert.equal(tok['color-bg'], '#FFF8F7'); assert.equal(tok['color-primary'], '#444E94'); assert.equal(tok['color-accent'], '#DB7679'); assert.equal(tok['color-surface'], '#FFFFFF');
 });

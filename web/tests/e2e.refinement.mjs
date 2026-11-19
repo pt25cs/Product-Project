@@ -57,7 +57,7 @@ const noOverflow = async (page, label) => { const o = await page.evaluate(() => 
   await page.getByRole('link', { name: 'See all your chores' }).waitFor();
   // Purple summary header uses the primary brand color.
   const summaryBg = await page.locator('details[data-key=chores] > summary').evaluate((s) => getComputedStyle(s).backgroundColor);
-  assert.equal(summaryBg, 'rgb(79, 70, 229)', 'dropdown summary is purple (brand primary)');
+  assert.equal(summaryBg, 'rgb(68, 78, 148)', 'dropdown summary is the brand indigo (primary)');
   const y = async (sel) => (await page.locator(sel).first().boundingBox()).y;
   const order = [
     await y('details[data-key=chores] > summary'),
@@ -175,30 +175,28 @@ const noOverflow = async (page, label) => { const o = await page.evaluate(() => 
   await page.context().close();
 }
 
-// ---------- desktop week view / sidebar ----------
+// ---------- desktop month view / sidebar ----------
 {
   const page = await open(1280, 900);
   const shot = (n) => shots && page.screenshot({ path: `${shots}/${n}.png` });
   const long = 'Quiet study session for organic chemistry midterm and review of problem sets';
   await page.evaluate((title) => { const s = window.__roomsync; const t = s.today(); s.addEvent({ title, category: 'quiet', startDate: t, startTime: '14:00', endDate: t, endTime: '16:00', notes: 'Please keep the living room quiet.' }); }, long);
   await page.goto(`${BASE}#/calendar`);
-  await page.getByRole('radio', { name: 'Week' }).check({ force: true });
-  const item = page.locator('.wk-item', { hasText: 'Quiet study session' }).first();
+  const item = page.locator('.mo-chip', { hasText: 'Quiet study session' }).first(); // Month is the default view
   await item.waitFor();
-  const b = await item.boundingBox(), col = await page.locator('.wk-day.today').boundingBox();
-  assert.ok(b.x >= col.x - 1 && b.x + b.width <= col.x + col.width + 1, 'event stays inside its day column');
-  assert.match(await item.locator('.t').innerText(), /2:00 PM/, 'time stays visible');
-  assert.equal(await item.locator('.n').evaluate((n) => n.scrollHeight > n.clientHeight), true, 'long title is clamped to a few lines in the narrow column');
+  const b = await item.boundingBox(), col = await page.locator('.mo-day.today').boundingBox();
+  assert.ok(b.x >= col.x - 1 && b.x + b.width <= col.x + col.width + 1, 'event chip stays inside its day cell');
+  assert.equal(await item.locator('.t').evaluate((n) => n.scrollWidth > n.clientWidth), true, 'long title is truncated with an ellipsis in the narrow cell');
   assert.equal(await item.getAttribute('title'), long);
-  await shot('week-desktop');
+  await shot('month-desktop');
   await item.click();
   await page.getByRole('dialog').getByRole('heading', { name: long }).waitFor();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Add event', exact: true }).click();
   await page.getByRole('heading', { name: 'Add event' }).waitFor();
   await page.keyboard.press('Escape');
-  for (const w of [900, 1024, 1099, 1100, 1280]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(80); await noOverflow(page, `week ${w}`); }
-  step('1280px week view: roomy items, time visible, long title clamped with full title on open; no overflow from 900–1280px');
+  for (const w of [900, 1024, 1099, 1100, 1280]) { await page.setViewportSize({ width: w, height: 900 }); await page.waitForTimeout(80); await noOverflow(page, `month ${w}`); }
+  step('1280px month view: chips stay in their cells, long title truncated with full title on open; no overflow from 900–1280px');
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`${BASE}#/home`);
   await shot('home-desktop');

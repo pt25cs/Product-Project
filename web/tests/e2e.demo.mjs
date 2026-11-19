@@ -112,6 +112,7 @@ step('6. external repayment recorded, balances updated, copy states no money mov
 
 // 7. calendar: invalid, add, edit
 await nav('Calendar').click();
+await page.getByRole('radio', { name: 'Agenda' }).check({ force: true }); // Month is the default view; the add/edit flow below uses the Agenda list
 await addMenu('Event');
 await page.getByRole('textbox', { name: 'Title' }).fill('Quiet time: orgo prep');
 await page.getByLabel('End time').fill('18:00');
@@ -127,9 +128,9 @@ await page.getByRole('textbox', { name: 'Title' }).fill('Quiet time: orgo exam')
 await page.getByRole('button', { name: 'Save changes' }).click();
 await page.getByRole('button', { name: /Quiet time: orgo exam/ }).first().waitFor();
 await shot('05-calendar-mobile');
-await page.getByRole('radio', { name: /Week/ }).check({ force: true });
+await page.getByRole('radio', { name: /Month/ }).check({ force: true });
 await page.getByText('Mon').first().waitFor();
-step('7. event added (validation error near field, values kept), edited, visible in agenda and week views');
+step('7. event added (validation error near field, values kept), edited, visible in agenda and month views');
 
 // 8/9. switch roommate; notifications
 await switchTo('Jordan');

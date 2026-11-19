@@ -21,5 +21,10 @@ createServer(async (req, res) => {
   try {
     const data = await readFile(file);
     res.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-store' }).end(data);
-  } catch { res.writeHead(404).end('Not found'); }
+  } catch {
+    // Dev convenience: config.js is git-ignored and optional. Serve an empty one (no Supabase values, so
+    // Kasa uses its dummy sign-in) instead of a 404 that would log a console error on every page load.
+    if (p === '/js/config.js') { res.writeHead(200, { 'Content-Type': types['.js'], 'Cache-Control': 'no-store' }).end("export const SUPABASE_URL = '';\nexport const SUPABASE_ANON_KEY = '';\n"); return; }
+    res.writeHead(404).end('Not found');
+  }
 }).listen(port, () => console.log(`Kasa running at http://localhost:${port}`));

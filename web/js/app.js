@@ -21,25 +21,40 @@ const app = $('#app');
 const hasLocalHousehold = () => { try { return !!storage.getItem(STORAGE_KEY); } catch { return false; } };
 const session = createSession({ getAuth: () => auth, hasLocalHousehold });
 
+// Which auth backend is in use: 'supabase' (real, needs config.js), 'mock' (dummy in-browser
+// accounts, the zero-config default) or null (demo-only; opt out with `export const MOCK_AUTH = false`).
+let authKind = null;
 async function tryInitBackend() {
-  let cfg;
-  try { cfg = await import('./config.js'); } catch (e) { console.info('[Kasa] no config.js — running demo-only.'); return; }
-  if (!cfg || !cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) { console.info('[Kasa] config.js present but blank — demo-only.'); return; }
+  let cfg = null;
+  try { cfg = await import('./config.js'); } catch (e) { /* no config.js: fall through to dummy auth */ }
+  const real = !!(cfg && cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY);
+  if (!real && cfg && cfg.MOCK_AUTH === false) { console.info('[Kasa] dummy auth disabled — running demo-only.'); return; }
   try {
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.119.0?bundle');
+    let client;
+    if (real) {
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.119.0?bundle');
+      client = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+      authKind = 'supabase';
+    } else {
+      // No real Supabase config: use the dummy backend so sign-in/household flows work offline.
+      const { createMockClient } = await import('./mock-client.mjs');
+      client = createMockClient({ storage });
+      window.__kasaMock = client;   // debug: __kasaMock.reset() wipes the dummy account + data
+      authKind = 'mock';
+    }
     const { createAuth } = await import('./auth.js');
-    const client = createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
     auth = createAuth({ client });
     await auth.init();
     auth.onChange(() => applyAuthMode());
     window.__kasaClient = client;   // used by sign-in/migration wiring
-    console.info('[Kasa] backend ready — sign-in available.');
+    console.info(`[Kasa] ${authKind === 'mock' ? 'dummy auth' : 'backend'} ready — sign-in available.`);
   } catch (e) {
-    auth = null;
+    auth = null; authKind = null;
     window.__kasaInitError = (e && (e.stack || e.message)) || String(e);
     console.error('[Kasa] backend init failed; falling back to demo-only:', e);
   }
 }
+const isMockAuth = () => authKind === 'mock';
 
 // Swap the store to the authenticated backend when a session appears; back to local on sign-out.
 async function applyAuthMode() {
@@ -82,7 +97,7 @@ async function reloadAccount() {
 }
 
 // Home dropdowns default: chores expanded (primary content), the rest collapsed to keep the home calm.
-const ui = { statsWeek: null, calSel: null, calView: null, open: { chores: true }, welcome: null, handled: null, focusAfter: null };
+const ui = { statsWeek: null, calSel: null, calView: null, open: { chores: true }, welcome: null, handled: null, focusAfter: null, openHandled: null, scrollTo: null };
 let loadError = null;
 const narrowMQ = window.matchMedia('(max-width: 859px)');
 const narrow = () => narrowMQ.matches;
@@ -94,9 +109,17 @@ const money = L.fmtMoney;
 const today = () => store.today();
 const avatar = (id) => `<span class="avatar" aria-hidden="true">${esc((name(id) || '?')[0])}</span>`;
 const empty = (title, text, action = '') => `<div class="empty"><strong>${esc(title)}</strong>${esc(text)}${action}</div>`;
-const sec = (id, title, body, { count, danger, icon, right = '' } = {}) => `<section class="sec" aria-labelledby="h-${id}"><div class="sec-head"><h2 id="h-${id}" class="${danger ? 'danger' : ''}">${icon ? ic(icon, 15) : ''}${esc(title)}${count != null ? `<span class="count">${count}</span>` : ''}</h2>${right}</div>${body}</section>`;
+const sec = (id, title, body, { count, danger, icon, right = '', cls = '' } = {}) => `<section class="sec${cls ? ` ${cls}` : ''}" aria-labelledby="h-${id}"><div class="sec-head"><h2 id="h-${id}" class="${danger ? 'danger' : ''}">${icon ? ic(icon, 15) : ''}${esc(title)}${count != null ? `<span class="count">${count}</span>` : ''}</h2>${right}</div><div class="sec-body">${body}</div></section>`;
+// Kasa mark (logo D, "Round table"): salmon circle, white K whose arm forms a roof. Recreated as inline SVG
+// from the design board; replace with the official asset when available.
+const logoMark = (size = 28) => `<svg class="logo-mark" width="${size}" height="${size}" viewBox="0 0 64 64" role="img" aria-label="Kasa"><circle cx="32" cy="32" r="32" fill="var(--color-accent)"/><g fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 20v24M23 35l11-11M30 38l12-12 12 12"/></g></svg>`;
+const navBtn = (href, label) => `<a class="btn sm nav" href="${href}">${label}${ic('chevR', 14)}</a>`;
+const counter = (id, len, max) => `<p class="counter" id="count-${id}" aria-hidden="true">${len} / ${max}</p>`;
 const addRow = (action, label, extra = '') => `<button type="button" class="add-row" data-action="${action}" ${extra}><span class="plus">${ic('plus', 18)}</span>${esc(label)}</button>`;
-const disclosure = (key, title, body, { count, right = '' } = {}) => `<details class="disclosure sec" data-key="${key}"${ui.open[key] ? ' open' : ''}><summary><span class="disc-title">${title}${count != null ? `<span class="count">${count}</span>` : ''}</span><span class="disc-end">${right}<span class="chev">${ic('chevron', 18)}</span></span></summary><div class="disc-body">${body}</div></details>`;
+const disclosure = (key, title, body, { count, right = '', sub = '', hint = '' } = {}) => {
+  const head = `${title}${count != null ? `<span class="count">${count}</span>` : ''}`;
+  return `<details class="disclosure sec" data-key="${key}"${ui.open[key] ? ' open' : ''}><summary><span class="disc-title${sub ? ' stack' : ''}">${sub ? `<span>${head}</span><span class="disc-sub">${sub}</span>` : head}</span><span class="disc-end">${right}${hint ? `<span class="disc-hint disc-hint-closed">${hint}</span><span class="disc-hint disc-hint-open">Hide</span>` : ''}<span class="chev">${ic('chevron', 18)}</span></span></summary><div class="disc-body">${body}</div></details>`;
+};
 function ago(iso) {
   const d = new Date(iso), mins = (Date.now() - d.getTime()) / 60000;
   if (mins < 1) return 'Just now';
@@ -166,8 +189,8 @@ function choreRow(o, { ctx = 'x', details = false, owner = false } = {}) {
   items.push(...swapMenuItems(o));
   items.push('-', { label: 'Delete chore', icon: 'trash', action: 'delete-chore', data: { id: o.id }, danger: true });
   const next = details && c && c.rotation.length ? `<span>Next: ${esc(who(L.nextAssigneeId(c, o)))}</span>` : '';
-  return `<li class="row" id="occ-${o.id}"><div class="row-lead">${lead}</div><div class="row-main"><div class="row-title"><button type="button" class="title-btn" data-action="view-chore" data-id="${o.id}">${esc(o.title)}</button></div>
-    <div class="row-meta">${dueMeta(o)}${c && c.recurrence === 'weekly' ? `<span>${ic('repeat', 13)}Weekly</span>` : ''}${next}</div>${details && o.notes ? `<div class="row-note">${esc(o.notes)}</div>` : ''}</div>
+  return `<li class="row" id="occ-${o.id}"><div class="row-lead">${lead}</div><div class="row-main"><button type="button" class="row-open" data-action="view-chore" data-id="${o.id}"><span class="ro-text"><span class="row-title">${esc(o.title)}</span>
+    <span class="row-meta">${dueMeta(o)}${c && c.recurrence === 'weekly' ? `<span>${ic('repeat', 13)}Weekly</span>` : ''}${next}</span>${details && o.notes ? `<span class="row-note">${esc(o.notes)}</span>` : ''}</span><span class="ro-chev">${ic('chevR', 16)}</span></button></div>
     <div class="row-side">${owner || !mine ? `<span class="owner">${avatar(o.assigneeId)}${esc(who(o.assigneeId))}</span>` : ''}${menu({ id: `${ctx}-${o.id}`, label: `More actions for ${o.title}`, items })}</div></li>`;
 }
 function doneRow(o) {
@@ -185,7 +208,7 @@ function groupPending(list) {
   for (const o of list) g[o.due < t ? 0 : o.due === t ? 1 : o.due <= weekEnd ? 2 : 3][1].push(o);
   return g.filter(([, v]) => v.length);
 }
-const choreSections = (groups, o) => groups.map(([label, items]) => sec(`g-${label.replace(/\W/g, '')}`, label, `<ul class="list">${items.map((x) => choreRow(x, o)).join('')}</ul>`, { count: items.length, danger: label === 'Overdue', icon: label === 'Overdue' ? 'alert' : null })).join('');
+const choreSections = (groups, o) => groups.map(([label, items]) => sec(`g-${label.replace(/\W/g, '')}`, label, `<ul class="list cardlist">${items.map((x) => choreRow(x, o)).join('')}</ul>`, { count: items.length, danger: label === 'Overdue', icon: label === 'Overdue' ? 'alert' : null })).join('');
 
 // ---------- shared pieces ----------
 function balanceBlock({ full = false } = {}) {
@@ -198,17 +221,23 @@ function balanceBlock({ full = false } = {}) {
   return `${head}${lines ? `<ul class="pay-list">${lines}</ul>` : ''}<p class="hint">${full ? 'Record a payment you made outside Kasa. Kasa doesn’t move money.' : 'Based on recorded expenses and repayments.'}</p>`;
 }
 function eventRow(ev) {
-  return `<li class="row"><div class="row-lead"><span class="ag-ic cat-${ev.category}">${ic(CAT_ICON[ev.category], 14)}</span></div><div class="row-main"><div class="row-title"><button type="button" class="title-btn" data-action="view-event" data-id="${ev.id}">${esc(ev.title)}</button></div><div class="row-meta"><span>${esc(eventWhen(ev))}</span></div></div></li>`;
+  return `<li class="row"><div class="row-lead"><span class="ag-ic cat-${ev.category}">${ic(CAT_ICON[ev.category], 14)}</span></div><div class="row-main"><button type="button" class="row-open" data-action="view-event" data-id="${ev.id}"><span class="ro-text"><span class="row-title">${esc(ev.title)}</span><span class="row-meta"><span>${esc(eventWhen(ev))}</span></span></span><span class="ro-chev">${ic('chevR', 16)}</span></button></div></li>`;
 }
-// Remaining-budget line shown near the monthly spending total (Requirement 4.4). Display only,
-// never blocks. Shows nothing special when no budget is set, but always offers a way to set/change it.
-function budgetLine() {
-  const b = store.sel.budgetStatus();
-  if (!b.set) return `<p class="small muted" style="margin-top:4px">No shared monthly budget set. <button type="button" class="btn quiet sm" data-action="set-budget">Set a budget</button></p>`;
-  const status = b.over
-    ? `<span class="chip warning">${ic('alert', 12)}Over by ${money(-b.remainingCents)}</span>`
-    : `<span class="chip success">${ic('check', 12)}${money(b.remainingCents)} left</span>`;
-  return `<p class="small" style="margin-top:6px">Shared budget ${money(b.budgetCents)} · ${status} <button type="button" class="btn quiet sm" data-action="set-budget" aria-label="Change shared budget">Change</button></p>`;
+// Bold "Budget & spending" card (display only, never blocks spending). Shows this month's household
+// spending, the shared budget, a progress bar and a text status (icon + words, never color alone).
+function budgetCard() {
+  const b = store.sel.budgetStatus(), month = L.fmtMonth(today()).split(' ')[0];
+  const note = '<p class="hint">Expenses dated this month. Repayments aren’t counted as spending. Display only: Kasa never blocks spending.</p>';
+  if (!b.set || !(b.budgetCents > 0)) {
+    return sec('budget', 'Budget & spending', `<div class="budget-top"><div class="budget-spent"><span class="budget-label">Household spending in ${esc(month)}</span><span class="budget-amount money">${money(b.spentCents)}</span></div></div>
+      <p class="budget-note">No shared monthly budget yet. Set one to see how much is left each month.</p>
+      <div class="btn-row"><button type="button" class="btn primary" data-action="set-budget">${ic('plus', 18)}Set a shared budget</button></div>${note}`, { icon: 'cart', cls: 'budget-card unset' });
+  }
+  const pct = b.spentCents <= 0 ? 0 : Math.min(100, Math.max(1, Math.round((b.spentCents / b.budgetCents) * 100)));
+  const status = b.over ? `<span class="budget-status over">${ic('alert', 18)}Over by ${money(-b.remainingCents)}</span>` : `<span class="budget-status">${ic('check', 18)}${money(b.remainingCents)} left</span>`;
+  return sec('budget', 'Budget & spending', `<div class="budget-top"><div class="budget-spent"><span class="budget-label">Spent in ${esc(month)}</span><span class="budget-amount money">${money(b.spentCents)}</span></div><p class="budget-of">of <strong class="money">${money(b.budgetCents)}</strong> shared budget</p></div>
+    <div class="progress${b.over ? ' over' : ''}" role="progressbar" aria-label="Shared budget used" aria-valuemin="0" aria-valuemax="${b.budgetCents}" aria-valuenow="${Math.min(b.spentCents, b.budgetCents)}" aria-valuetext="${money(b.spentCents)} of ${money(b.budgetCents)} spent"><span style="width:${pct}%${pct === 0 ? ';min-width:0' : ''}"></span></div>
+    <div class="budget-foot">${status}<button type="button" class="btn" data-action="set-budget" aria-label="Change shared budget">${ic('edit', 16)}Change budget</button></div>${note}`, { icon: 'cart', cls: 'budget-card' });
 }
 // Non-blocking purchasing-rule hint for the shopping flow (Requirement 4.3). Surfaces preferred
 // products / store preferences / budget status as informational guidance only — never blocks.
@@ -222,7 +251,7 @@ function shoppingHint() {
   if (sp.length) bits.push(`Stores: ${sp.slice(0, 3).map(esc).join(', ')}${sp.length > 3 ? ` +${sp.length - 3} more` : ''}`);
   if (b.set) bits.push(b.over ? `Over the shared budget by ${money(-b.remainingCents)}` : `${money(b.remainingCents)} left in the shared budget`);
   if (!bits.length) return '';
-  return `<div class="panel-soft" style="margin-bottom:12px"><p class="small"><strong>${ic('info', 14)}Purchasing rules</strong> ${bits.join(' · ')}</p><p class="hint" style="margin-top:4px">Guidance only — Kasa never blocks a purchase. Manage these in <a href="#/settings">Settings</a>.</p></div>`;
+  return `<div class="panel-soft hint-card"><div><p class="small"><strong>${ic('info', 14)}Purchasing rules</strong> ${bits.join(' · ')}</p><p class="hint" style="margin-top:4px">Guidance only: Kasa never blocks a purchase.</p></div>${navBtn('#/home?open=purchrules', 'Open purchasing rules')}</div>`;
 }
 function shopRowCompact(i) {
   return `<li class="row"><div class="row-main"><div class="row-title">${esc(i.name)} <span class="muted" style="font-weight:400">× ${esc(i.qty)}</span></div><div class="row-meta"><span>${i.buyerId ? `${esc(who(i.buyerId))} claimed` : 'Unclaimed'}</span></div></div></li>`;
@@ -234,6 +263,9 @@ const moreLink = (n, shown, href, label) => (n > shown ? `<a class="more-link" h
 const moreText = (n, shown, what) => (n > shown ? `<p class="small muted" style="padding-top:8px">+ ${n - shown} more ${what}</p>` : '');
 function viewHome() {
   const s = store.state, t = today(), me = store.me();
+  // Deep link such as #/home?open=purchrules opens that card once and scrolls to it after render.
+  const wantOpen = parseRoute().query.open;
+  if (wantOpen && ui.openHandled !== location.hash) { ui.open[wantOpen] = true; ui.openHandled = location.hash; ui.scrollTo = wantOpen; }
   const hr = new Date().getHours();
   const greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
   const mine = store.sel.mine();
@@ -250,12 +282,14 @@ function viewHome() {
   const choresBody = `${sec('today', 'Your chores', todayBody + addRow('add-chore', 'Add chore'), { count: dueToday.length || null })}
       ${upcomingAll.length ? sec('up', 'Your upcoming chores', list(upcoming) + moreLink(upcomingAll.length, upcoming.length, '#/chores/mine', 'See all your chores'), { count: upcomingAll.length }) : ''}`;
   const mainCol = `<div data-o="1">${overdueMine.length ? sec('over', 'Overdue', list(overdueMine), { count: overdueMine.length, danger: true, icon: 'alert' }) : ''}
-      ${disclosure('chores', 'Chores', choresBody, { count: dueToday.length || null, right: '<a href="#/chores">Open chores</a>' })}</div>
+      ${disclosure('chores', 'Chores', choresBody, { count: dueToday.length || null, right: navBtn('#/chores', 'Open chores') })}</div>
     ${others.length ? `<div data-o="2">${sec('others', 'Past due in the household', `<ul class="list">${others.slice(0, PREVIEW).map((o) => choreRow(o, { ctx: 'o', owner: true })).join('')}</ul>${moreLink(others.length, PREVIEW, '#/chores/all', 'See all chores')}`, { count: others.length })}</div>` : ''}
-    <div data-o="6">${disclosure('activity', 'Recent activity', feed.length ? `<ul class="feed">${feed.map((a) => `<li><a href="${esc(a.link)}"><strong>${esc(who(a.actorId))}</strong> ${esc(L.displayCopy(a.verb))} ${esc(L.displayCopy(a.subject))}</a><time datetime="${a.ts}">${ago(a.ts)}</time></li>`).join('')}</ul>` : empty('No activity yet', 'Completed chores, purchases and changes show up here.'))}</div>`;
-  const sideCol = `<div data-o="3">${disclosure('expenses', 'Expenses', balanceBlock(), { right: '<a href="#/money/expenses">Open expenses</a>' })}</div>
-    <div data-o="4">${disclosure('plans', 'Household plans', events.length ? `<ul class="list">${events.slice(0, PREVIEW).map(eventRow).join('')}</ul>${moreText(events.length, PREVIEW, 'in the next 14 days')}` : empty('Nothing planned', 'Add quiet time, guests or plans so everyone knows.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>'), { count: events.length || null, right: '<a href="#/calendar">Calendar</a>' })}</div>
-    <div data-o="5">${disclosure('shopping', 'Shopping list', needed.length ? `<ul class="list">${needed.slice(0, PREVIEW).map(shopRowCompact).join('')}</ul>${moreText(needed.length, PREVIEW, 'needed')}` : empty('Nothing needed', 'Add something when the apartment runs low.', '<br><button type="button" class="btn sm" data-action="add-item">Add item</button>'), { count: needed.length || null, right: '<a href="#/money/shopping">Open list</a>' })}</div>`;
+    <div data-o="8">${disclosure('activity', 'Recent activity', feed.length ? `<ul class="feed">${feed.map((a) => `<li><a href="${esc(a.link)}"><strong>${esc(who(a.actorId))}</strong> ${esc(L.displayCopy(a.verb))} ${esc(L.displayCopy(a.subject))}</a><time datetime="${a.ts}">${ago(a.ts)}</time></li>`).join('')}</ul>` : empty('No activity yet', 'Completed chores, purchases and changes show up here.'))}</div>`;
+  const sideCol = `<div data-o="3">${disclosure('expenses', 'Expenses', balanceBlock(), { right: navBtn('#/money/expenses', 'Open expenses') })}</div>
+    <div data-o="4">${disclosure('plans', 'Household plans', events.length ? `<ul class="list">${events.slice(0, PREVIEW).map(eventRow).join('')}</ul>${moreText(events.length, PREVIEW, 'in the next 14 days')}` : empty('Nothing planned', 'Add quiet time, guests or plans so everyone knows.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>'), { count: events.length || null, right: navBtn('#/calendar', 'Calendar') })}</div>
+    <div data-o="5">${disclosure('shopping', 'Shopping list', needed.length ? `<ul class="list">${needed.slice(0, PREVIEW).map(shopRowCompact).join('')}</ul>${moreText(needed.length, PREVIEW, 'needed')}` : empty('Nothing needed', 'Add something when the apartment runs low.', '<br><button type="button" class="btn sm" data-action="add-item">Add item</button>'), { count: needed.length || null, right: navBtn('#/money/shopping', 'Open list') })}</div>
+    <div data-o="6">${expectationsCard()}</div>
+    <div data-o="7">${purchasingRulesCard()}</div>`;
   return `<div class="page-head"><div><h1>Today</h1><p class="sub">${greet}, ${esc(name(me))} · ${L.fmtDay(t)}</p></div></div><div class="dash"><div class="dash-col">${mainCol}</div><div class="dash-col">${sideCol}</div></div>`;
 }
 
@@ -281,7 +315,7 @@ function swapRequestsSection() {
       ? `You asked someone to take <strong>${esc(occTitle(s.occId))}</strong>`
       : `You offered <strong>${esc(occTitle(s.occId))}</strong> to ${esc(store.nameOf(s.addresseeId))} for <strong>${esc(occTitle(s.targetOccId))}</strong>`,
     btn('cancel-swap', s.id, 'Cancel')));
-  return sec('swaps', 'Swap requests', `<ul class="list">${lines.join('')}</ul>`, { count: lines.length, icon: 'repeat' });
+  return sec('swaps', 'Swap requests', `<ul class="list cardlist">${lines.join('')}</ul>`, { count: lines.length, icon: 'repeat' });
 }
 
 // ---------- Chores ----------
@@ -292,17 +326,18 @@ function viewChores(tab) {
     <table><caption class="sr-only">Chores due this week, by roommate</caption><thead><tr><th scope="col">Roommate</th><th scope="col" class="num">Completed</th><th scope="col" class="num">Still open</th></tr></thead><tbody>
     ${stats.map((r) => `<tr><th scope="row">${avatar(r.id)} ${esc(name(r.id))}${r.id === store.me() ? ' (you)' : ''}</th><td class="num">${r.completed}</td><td class="num">${r.pending}</td></tr>`).join('')}</tbody></table>
     <p class="hint">Counts show what’s recorded for chores due that week. They aren’t a fairness score: chores differ in effort and schedules differ.</p>`;
-  let body;
+  let body, addBtn = '';
   if (tab === 'done') {
     const list = store.sel.done();
-    body = sec('done', 'Completed', list.length ? `<ul class="list">${list.map(doneRow).join('')}</ul>` : empty('Nothing completed yet', 'Check off a chore and it appears here with who did it and when.'), { count: list.length || null });
+    body = sec('done', 'Completed', list.length ? `<ul class="list cardlist">${list.map(doneRow).join('')}</ul>` : empty('Nothing completed yet', 'Check off a chore and it appears here with who did it and when.'), { count: list.length || null });
   } else {
     const groups = groupPending(tab === 'mine' ? store.sel.mine() : store.sel.pending());
-    body = (groups.length ? choreSections(groups, { ctx: tab, details: true, owner: tab === 'all' }) : empty(tab === 'mine' ? 'You have no open chores' : 'No open chores', 'Add a chore to give the household something to track.')) + `<div class="sec">${addRow('add-chore', 'Add chore')}</div>`;
+    body = groups.length ? choreSections(groups, { ctx: tab, details: true, owner: tab === 'all' }) : empty(tab === 'mine' ? 'You have no open chores' : 'No open chores', 'Add a chore to give the household something to track.');
+    addBtn = `<div class="add-wrap">${addRow('add-chore', 'Add chore')}</div>`;
   }
   const tabs = [['mine', 'Mine'], ['all', 'All chores'], ['done', 'Completed']];
   return `<div class="page-head"><h1>Chores</h1></div>
-  <nav class="tabs" aria-label="Chore views">${tabs.map(([k, l]) => `<a href="#/chores/${k}"${tab === k ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav>${swapRequestsSection()}${body}${disclosure('stats', 'Weekly counts by roommate', statsBody)}`;
+  <nav class="tabs" aria-label="Chore views">${tabs.map(([k, l]) => `<a href="#/chores/${k}"${tab === k ? ' aria-current="page"' : ''}>${l}</a>`).join('')}</nav><div class="cards">${swapRequestsSection()}${body}</div>${addBtn}<div class="cards">${disclosure('stats', 'Weekly counts by roommate', statsBody)}</div>`;
 }
 
 // ---------- Expenses & shopping ----------
@@ -316,18 +351,18 @@ function viewMoney(tab) {
       if (i.buyerId) items.push({ label: mine ? 'Release claim' : `Take over from ${name(i.buyerId)}`, icon: 'user', action: mine ? 'unclaim' : 'takeover', data: { id: i.id } });
       items.push({ label: 'Edit item', icon: 'edit', action: 'edit-item', data: { id: i.id } }, '-', { label: 'Remove item', icon: 'trash', action: 'delete-item', data: { id: i.id }, danger: true });
       return `<li class="row" id="item-${i.id}"><div class="row-lead"><button type="button" class="chk" role="checkbox" aria-checked="false" data-action="purchase" data-id="${i.id}" aria-label="Purchased: ${esc(i.name)}"><span class="box">${ic('check', 14)}</span></button></div>
-        <div class="row-main"><div class="row-title"><button type="button" class="title-btn" data-action="edit-item" data-id="${i.id}">${esc(i.name)}</button> <span class="muted" style="font-weight:400">× ${esc(i.qty)}</span></div>
-        <div class="row-meta">${i.buyerId ? `<span>${avatar(i.buyerId)}${mine ? 'You’re' : esc(name(i.buyerId)) + ' is'} getting this</span>` : '<span>Unclaimed</span>'}</div>${i.notes ? `<div class="row-note">${esc(i.notes)}</div>` : ''}</div>
-        <div class="row-side">${i.buyerId ? '' : `<button type="button" class="btn quiet sm" data-action="claim" data-id="${i.id}" aria-label="Claim ${esc(i.name)}">Claim</button>`}${menu({ id: `s-${i.id}`, label: `More actions for ${i.name}`, items })}</div></li>`;
+        <div class="row-main"><button type="button" class="row-open" data-action="edit-item" data-id="${i.id}"><span class="ro-text"><span class="row-title"><span class="sr-only">Edit </span>${esc(i.name)} <span class="muted" style="font-weight:400">× ${esc(i.qty)}</span></span>
+        <span class="row-meta">${i.buyerId ? `<span>${avatar(i.buyerId)}${mine ? 'You’re' : esc(name(i.buyerId)) + ' is'} getting this</span>` : '<span>Unclaimed</span>'}</span>${i.notes ? `<span class="row-note">${esc(i.notes)}</span>` : ''}</span><span class="ro-chev">${ic('chevR', 16)}</span></button></div>
+        <div class="row-side">${i.buyerId ? '' : `<button type="button" class="btn sm" data-action="claim" data-id="${i.id}" aria-label="Claim ${esc(i.name)}">Claim</button>`}${menu({ id: `s-${i.id}`, label: `More actions for ${i.name}`, items })}</div></li>`;
     };
-    const histRow = (i) => `<li class="row" id="item-${i.id}"><div class="row-lead"><span class="box done" aria-hidden="true">${ic('check', 14)}</span></div><div class="row-main"><div class="row-title done">${esc(i.name)} <span style="font-weight:400">× ${esc(i.qty)}</span></div><div class="row-meta"><span>Purchased by ${esc(who(i.purchasedBy))} · ${L.fmtStamp(i.purchasedAt)}</span>${i.expenseId ? `<a href="#/money/expenses?id=${i.expenseId}">See expense</a>` : ''}</div></div>
-      <div class="row-side"><button type="button" class="btn quiet sm" data-action="add-again" data-id="${i.id}" aria-label="Add ${esc(i.name)} again">Add again</button>${i.expenseId ? '' : `<button type="button" class="btn quiet sm" data-action="reopen-item" data-id="${i.id}" aria-label="Move ${esc(i.name)} back to needed">Undo</button>`}</div></li>`;
+    const histRow = (i) => `<li class="row row-wrap" id="item-${i.id}"><div class="row-lead"><span class="box done" aria-hidden="true">${ic('check', 14)}</span></div><div class="row-main"><div class="row-title done">${esc(i.name)} <span style="font-weight:400">× ${esc(i.qty)}</span></div><div class="row-meta"><span>Purchased by ${esc(who(i.purchasedBy))} · ${L.fmtStamp(i.purchasedAt)}</span></div></div>
+      <div class="row-side">${i.expenseId ? navBtn(`#/money/expenses?id=${i.expenseId}`, 'See expense') : ''}<button type="button" class="btn sm" data-action="add-again" data-id="${i.id}" aria-label="Add ${esc(i.name)} again">${ic('plus', 14)}Add again</button>${i.expenseId ? '' : `<button type="button" class="btn sm" data-action="reopen-item" data-id="${i.id}" aria-label="Move ${esc(i.name)} back to needed">${ic('undo', 14)}Undo</button>`}</div></li>`;
     return `<div class="page-head"><h1>Expenses &amp; shopping</h1></div>${tabsNav}
       <form data-inline="add-item" class="quick-add" novalidate><div class="grow"><label class="sr-only" for="qa-name">Add an item</label><input type="text" id="qa-name" name="name" placeholder="Add an item" maxlength="60" autocomplete="off"><p class="field-error" id="qa-err" role="alert" hidden></p></div>
         <div class="qty"><label class="sr-only" for="qa-qty">Quantity</label><input type="text" id="qa-qty" name="qty" placeholder="Qty" maxlength="20" autocomplete="off"></div><button type="submit" class="btn primary">Add</button></form>
       ${shoppingHint()}
-      ${sec('need', 'Needed', needed.length ? `<ul class="list">${needed.map(row).join('')}</ul>` : empty('Nothing needed right now', 'Type above to add something the apartment is running low on.'), { count: needed.length })}
-      ${disclosure('bought', `Purchased <span class="count">${bought.length}</span>`, bought.length ? `<ul class="list">${bought.map(histRow).join('')}</ul>` : empty('Nothing purchased yet', 'Purchased items are kept here so you can add them again.'))}`;
+      <div class="cards">${sec('need', 'Needed', needed.length ? `<ul class="list cardlist">${needed.map(row).join('')}</ul>` : empty('Nothing needed right now', 'Type above to add something the apartment is running low on.'), { count: needed.length, icon: 'cart' })}
+      ${disclosure('bought', `Purchased <span class="count">${bought.length}</span>`, bought.length ? `<ul class="list cardlist">${bought.map(histRow).join('')}</ul>` : empty('Nothing purchased yet', 'Purchased items are kept here so you can add them again.'))}</div>`;
   }
   const s = store.state, me = store.me(), bal = store.sel.balances();
   const owesSomeone = store.sel.settlements().some((x) => x.from === me); // the balance panel already offers a prefilled repayment
@@ -338,17 +373,18 @@ function viewMoney(tab) {
     const extra = `<li>Split ${e.participantIds.length} ${e.participantIds.length === 1 ? 'way' : 'ways'} equally</li>${e.shoppingItemId ? '<li>Recorded from a shopping list purchase</li>' : ''}`;
     return `<li class="row" id="exp-${e.id}"><div class="row-lead">${avatar(e.payerId)}</div><div class="row-main"><div class="row-title">${esc(e.description)}</div>
       <div class="row-meta"><span>${esc(who(e.payerId))} paid · ${L.fmtDay(e.date)}</span></div>
-      <details class="inline" data-key="exp-${e.id}"${ui.open[`exp-${e.id}`] ? ' open' : ''}><summary>Details</summary><ul>${extra}${lines}</ul></details></div>
+      <details class="inline btn-summary" data-key="exp-${e.id}"${ui.open[`exp-${e.id}`] ? ' open' : ''}><summary>Details<span class="chev">${ic('chevron', 14)}</span></summary><ul>${extra}${lines}</ul></details></div>
       <div class="row-side"><div class="amount">${money(e.amountCents)}<small>${share !== undefined ? `Your share ${money(share)}` : 'Not in split'}</small></div>${menu({ id: `e-${e.id}`, label: `More actions for ${e.description}`, items: [{ label: 'Edit expense', icon: 'edit', action: 'edit-expense', data: { id: e.id } }, '-', { label: 'Delete expense', icon: 'trash', action: 'delete-expense', data: { id: e.id }, danger: true }] })}</div></li>`;
   };
   const reRow = (r) => `<li class="row"><div class="row-lead">${ic('repeatSm', 18)}</div><div class="row-main"><div class="row-title">${esc(who(r.fromId))} repaid ${esc(name(r.toId))}</div><div class="row-meta"><span>${L.fmtDay(r.date)}</span><span>Paid outside Kasa</span>${r.note ? `<span>${esc(r.note)}</span>` : ''}</div></div>
     <div class="row-side"><div class="amount">${money(r.amountCents)}</div>${menu({ id: `r-${r.id}`, label: 'More actions for repayment', items: [{ label: 'Delete repayment', icon: 'trash', action: 'delete-reimb', data: { id: r.id }, danger: true }] })}</div></li>`;
   const balances = `<table><caption class="sr-only">Net balance by roommate</caption><thead><tr><th scope="col">Roommate</th><th scope="col" class="num">Balance</th></tr></thead><tbody>${s.members.map((m) => `<tr><th scope="row">${avatar(m.id)} ${esc(m.name)}${m.id === me ? ' (you)' : ''}</th><td class="num">${bal[m.id] > 0 ? `Is owed ${money(bal[m.id])}` : bal[m.id] < 0 ? `Owes ${money(-bal[m.id])}` : 'Settled up'}</td></tr>`).join('')}</tbody></table>`;
+  const histActions = `<div class="btn-row"><button type="button" class="btn primary" data-action="add-expense">${ic('plus', 18)}Add expense</button>${owesSomeone ? '' : `<button type="button" class="btn" data-action="add-reimb">${ic('repeatSm', 18)}Record repayment</button>`}</div>`;
   return `<div class="page-head"><h1>Expenses &amp; shopping</h1></div>${tabsNav}
-    <div class="sec"><div class="panel-soft"><h2 style="margin-bottom:8px">Your balance</h2>${balanceBlock({ full: true })}</div></div>
-    ${sec('hist', 'Expenses and repayments', (hist.length ? `<ul class="list">${hist.map((h) => (h.k === 'e' ? expRow(h.v) : reRow(h.v))).join('')}</ul>` : empty('No expenses yet', 'Add the first shared expense, like utilities or groceries.')) + addRow('add-expense', 'Add expense') + (owesSomeone ? '' : addRow('add-reimb', 'Record repayment')))}
-    ${sec('tot', `Household spending in ${L.fmtMonth(today()).split(' ')[0]}`, `<p class="balance-line money" style="padding-top:12px">${money(store.sel.monthTotal())}</p>${budgetLine()}<p class="hint">Expenses dated this month. Repayments aren’t counted as spending.</p>`)}
-    ${disclosure('balances', 'Everyone’s balance', balances)}`;
+    <div class="cards">${sec('bal', 'Your balance', balanceBlock({ full: true }), { icon: 'money' })}
+    ${sec('hist', 'Expenses and repayments', (hist.length ? `<ul class="list cardlist">${hist.map((h) => (h.k === 'e' ? expRow(h.v) : reRow(h.v))).join('')}</ul>` : empty('No expenses yet', 'Add the first shared expense, like utilities or groceries.')) + histActions, { icon: 'list' })}
+    ${budgetCard()}
+    ${disclosure('balances', 'Everyone’s balance', balances)}</div>`;
 }
 
 // ---------- Calendar ----------
@@ -359,43 +395,60 @@ function rangeLabel(ev, day) {
   if (ed === day) return `Until<br>${L.fmtTime(L.dtTime(ev.end))}`;
   return 'All day';
 }
+// One day's agenda block (used by the Agenda view and by the Month view's selected-day panel).
+function agendaDay(d, evs, occs) {
+  const t = today();
+  const label = d === t ? 'Today' : L.diffDays(t, d) === 1 ? 'Tomorrow' : L.fmtWeekdayLong(d);
+  return `<section class="agenda-day" aria-labelledby="ag-${d}"><h3 id="ag-${d}" class="${d === t ? 'today' : ''}">${label} <span class="d">${L.fmtDay(d)}</span></h3>
+      ${evs.map((e) => `<button type="button" class="ag-row" data-action="view-event" data-id="${e.id}"><span class="ag-time">${rangeLabel(e, d)}</span><span class="ag-ic cat-${e.category}">${ic(CAT_ICON[e.category], 15)}</span><span><span class="ag-title">${esc(e.title)}</span><span class="ag-sub" style="display:block">${esc(L.CATEGORIES[e.category].label)} · ${esc(who(e.creatorId))}</span></span></button>`).join('')}
+      ${occs.map((o) => `<button type="button" class="ag-row" data-action="view-chore" data-id="${o.id}"><span class="ag-time">Chore</span><span class="ag-ic chore">${ic('chores', 15)}</span><span><span class="ag-title${o.doneAt ? ' done' : ''}">${esc(o.title)}</span><span class="ag-sub" style="display:block">${esc(who(o.assigneeId))}${o.doneAt ? ' · Done' : ''}</span></span></button>`).join('')}
+      ${!evs.length && !occs.length ? '<p class="small muted" style="padding:12px 0">Nothing planned</p>' : ''}</section>`;
+}
 function viewCalendar() {
   const t = today();
   ui.calSel ||= t;
-  const sel = ui.calSel, view = ui.calView || (narrow() ? 'agenda' : 'week');
+  // Views: Month (default) and Agenda. A stale in-memory 'week' value falls back to Month.
+  const sel = ui.calSel, view = ui.calView === 'agenda' ? 'agenda' : 'month', isMonth = view === 'month';
   const ws = L.startOfWeek(sel), days = Array.from({ length: 7 }, (_, i) => L.addDays(ws, i));
   const meta = (d) => ({ evs: store.sel.eventsOn(d), occs: store.sel.occsOn(d) });
-  const bar = `<div class="cal-bar"><div class="cal-title"><h2>${L.fmtMonth(sel)}</h2><button type="button" class="icon-btn sm" data-action="cal-shift" data-delta="-7" aria-label="Previous week">${ic('chevL', 18)}</button><button type="button" class="icon-btn sm" data-action="cal-shift" data-delta="7" aria-label="Next week">${ic('chevR', 18)}</button><button type="button" class="btn quiet sm" data-action="cal-today">Today</button></div>
-    <div class="cal-tools"><div class="seg" role="group" aria-label="Calendar view"><label><input type="radio" name="calview" value="agenda" data-action="cal-view" data-view="agenda"${view === 'agenda' ? ' checked' : ''}><span>Agenda</span></label><label><input type="radio" name="calview" value="week" data-action="cal-view" data-view="week"${view === 'week' ? ' checked' : ''}><span>Week</span></label></div><button type="button" class="btn primary" data-action="add-event">${ic('plus', 18)}Add event</button></div></div>`;
+  const shift = (dir) => `<button type="button" class="icon-btn sm" data-action="cal-shift" ${isMonth ? `data-months="${dir}"` : `data-delta="${dir * 7}"`} aria-label="${dir < 0 ? 'Previous' : 'Next'} ${isMonth ? 'month' : 'week'}">${ic(dir < 0 ? 'chevL' : 'chevR', 18)}</button>`;
+  const bar = `<div class="cal-bar"><div class="cal-title"><h2>${L.fmtMonth(sel)}</h2>${shift(-1)}${shift(1)}<button type="button" class="btn quiet sm" data-action="cal-today">Today</button></div>
+    <div class="cal-tools"><div class="seg" role="group" aria-label="Calendar view"><label><input type="radio" name="calview" value="month" data-action="cal-view" data-view="month"${isMonth ? ' checked' : ''}><span>Month</span></label><label><input type="radio" name="calview" value="agenda" data-action="cal-view" data-view="agenda"${!isMonth ? ' checked' : ''}><span>Agenda</span></label></div><button type="button" class="btn primary" data-action="add-event">${ic('plus', 18)}Add event</button></div></div>`;
+  const dotsFor = (evs, occs) => {
+    const cats = [...new Set(evs.map((e) => e.category))].slice(0, 3);
+    return cats.map((c) => `<i class="${c}"></i>`).join('') + (occs.length && cats.length < 3 ? '<i class="chore"></i>' : '');
+  };
   let body;
-  if (view === 'agenda') {
+  if (isMonth) {
+    const MAX_CHIPS = 3;
+    const cell = ({ date: d, inMonth }) => {
+      const { evs, occs } = meta(d), n = evs.length + occs.length;
+      const chips = [
+        ...evs.map((e) => `<button type="button" class="mo-chip cat-${e.category}" data-action="view-event" data-id="${e.id}" title="${esc(e.title)}">${ic(CAT_ICON[e.category], 11)}<span class="t">${esc(e.title)}</span></button>`),
+        ...occs.map((o) => `<button type="button" class="mo-chip chore${o.doneAt ? ' is-done' : ''}" data-action="view-chore" data-id="${o.id}" title="${esc(o.title)}">${ic('chores', 11)}<span class="t">${esc(o.title)}</span></button>`),
+      ];
+      const more = n > MAX_CHIPS ? `<button type="button" class="mo-more" data-action="cal-pick" data-date="${d}" aria-label="${n - MAX_CHIPS} more on ${L.fmtFull(d)}">+${n - MAX_CHIPS} more</button>` : '';
+      return `<div class="mo-day${inMonth ? '' : ' out'}${d === t ? ' today' : ''}${d === sel ? ' sel' : ''}"><button type="button" class="mo-num" data-action="cal-pick" data-date="${d}" aria-pressed="${d === sel}"${d === t ? ' aria-current="date"' : ''} aria-label="${L.fmtFull(d)}${d === t ? ', today' : ''}${n ? `, ${plural(n, 'item')}` : ''}">${parseInt(d.slice(8), 10)}</button>
+        <div class="mo-items">${chips.slice(0, MAX_CHIPS).join('')}${more}</div><span class="mo-dots" aria-hidden="true">${dotsFor(evs, occs)}</span></div>`;
+    };
+    const m = meta(sel);
+    body = `<div class="cal-layout"><div><div class="month" role="group" aria-label="${L.fmtMonth(sel)}"><div class="month-head" aria-hidden="true">${days.map((d) => `<span>${L.fmtWeekday(d)}</span>`).join('')}</div>
+      ${L.monthGrid(sel).map((week) => `<div class="month-week">${week.map(cell).join('')}</div>`).join('')}</div></div>
+      <aside class="cal-side" aria-label="Selected day">${agendaDay(sel, m.evs, m.occs)}</aside></div>`;
+  } else {
     const strip = `<div class="date-strip" role="group" aria-label="Week of ${L.fmtMonthDay(ws)}">${days.map((d) => {
       const { evs, occs } = meta(d), n = evs.length + occs.length;
-      const cats = [...new Set(evs.map((e) => e.category))].slice(0, 3);
-      const dots = cats.map((c) => `<i class="${c}"></i>`).join('') + (occs.length && cats.length < 3 ? '<i class="chore"></i>' : '');
-      return `<button type="button" class="ds-day${d === t ? ' is-today' : ''}" data-action="cal-pick" data-date="${d}" aria-pressed="${d === sel}"${d === t ? ' aria-current="date"' : ''} aria-label="${L.fmtFull(d)}${d === t ? ', today' : ''}${n ? `, ${plural(n, 'item')}` : ''}"><span class="wd" aria-hidden="true">${L.fmtWeekday(d)}</span><span class="dn" aria-hidden="true">${parseInt(d.slice(8), 10)}</span><span class="dots" aria-hidden="true">${dots}</span></button>`;
+      return `<button type="button" class="ds-day${d === t ? ' is-today' : ''}" data-action="cal-pick" data-date="${d}" aria-pressed="${d === sel}"${d === t ? ' aria-current="date"' : ''} aria-label="${L.fmtFull(d)}${d === t ? ', today' : ''}${n ? `, ${plural(n, 'item')}` : ''}"><span class="wd" aria-hidden="true">${L.fmtWeekday(d)}</span><span class="dn" aria-hidden="true">${parseInt(d.slice(8), 10)}</span><span class="dots" aria-hidden="true">${dotsFor(evs, occs)}</span></button>`;
     }).join('')}</div>`;
     const list = [];
     for (let i = 0; i < 14; i++) {
       const d = L.addDays(sel, i), m = meta(d);
       if (i === 0 || m.evs.length || m.occs.length) list.push({ d, ...m });
     }
-    const label = (d) => (d === t ? 'Today' : L.diffDays(t, d) === 1 ? 'Tomorrow' : L.fmtWeekdayLong(d));
     const any = list.some((x) => x.evs.length || x.occs.length);
-    const rows = list.map(({ d, evs, occs }) => `<section class="agenda-day" aria-labelledby="ag-${d}"><h3 id="ag-${d}" class="${d === t ? 'today' : ''}">${label(d)} <span class="d">${L.fmtDay(d)}</span></h3>
-      ${evs.map((e) => `<button type="button" class="ag-row" data-action="view-event" data-id="${e.id}"><span class="ag-time">${rangeLabel(e, d)}</span><span class="ag-ic cat-${e.category}">${ic(CAT_ICON[e.category], 15)}</span><span><span class="ag-title">${esc(e.title)}</span><span class="ag-sub" style="display:block">${esc(L.CATEGORIES[e.category].label)} · ${esc(who(e.creatorId))}</span></span></button>`).join('')}
-      ${occs.map((o) => `<button type="button" class="ag-row" data-action="view-chore" data-id="${o.id}"><span class="ag-time">Chore</span><span class="ag-ic chore">${ic('chores', 15)}</span><span><span class="ag-title${o.doneAt ? ' done' : ''}">${esc(o.title)}</span><span class="ag-sub" style="display:block">${esc(who(o.assigneeId))}${o.doneAt ? ' · Done' : ''}</span></span></button>`).join('')}
-      ${!evs.length && !occs.length ? '<p class="small muted" style="padding:12px 0">Nothing planned</p>' : ''}</section>`).join('');
+    const rows = list.map(({ d, evs, occs }) => agendaDay(d, evs, occs)).join('');
     const anchor = `<div class="ag-anchor"><span>Next 14 days · From <strong>${L.fmtMonthDay(sel)}</strong>${sel === t ? ' (today)' : ''}</span>${sel !== t ? '<button type="button" class="btn quiet sm" data-action="cal-today">Back to today</button>' : ''}<details class="inline" data-key="aghelp"${ui.open.aghelp ? ' open' : ''}><summary>How this works</summary><p>The agenda starts on the day you pick in the strip above and lists the next 14 days. Days with nothing planned are skipped.</p></details></div>`;
     body = `${strip}${anchor}${any ? rows : rows + empty('Nothing on the calendar', 'Add quiet time, guests, an away day or a household plan.', '<br><button type="button" class="btn sm" data-action="add-event">Add event</button>')}`;
-  } else {
-    body = `<div class="week">${days.map((d) => {
-      const { evs, occs } = meta(d), none = !evs.length && !occs.length;
-      return `<section class="wk-day${d === t ? ' today' : ''}${d < t ? ' past' : ''}" aria-label="${L.fmtFull(d)}"><button type="button" class="wk-head" data-action="cal-open-day" data-date="${d}" aria-label="Open ${L.fmtFull(d)} in agenda"><span>${L.fmtWeekday(d)}</span><span class="dn">${parseInt(d.slice(8), 10)}</span></button>
-        ${evs.map((e) => `<button type="button" class="wk-item cat-${e.category}" data-action="view-event" data-id="${e.id}" title="${esc(e.title)}"><span class="t">${ic(CAT_ICON[e.category], 12)}${L.fmtTime(L.dtTime(e.start))}</span><span class="n">${esc(e.title)}</span></button>`).join('')}
-        ${occs.map((o) => `<button type="button" class="wk-item chore${o.doneAt ? ' is-done' : ''}" data-action="view-chore" data-id="${o.id}" title="${esc(o.title)}"><span class="t">${ic('chores', 12)}${esc(who(o.assigneeId))}</span><span class="n">${esc(o.title)}</span></button>`).join('')}
-        ${none ? '<span class="wk-none">Nothing planned</span>' : ''}</section>`;
-    }).join('')}</div>`;
   }
   return `<div class="page-head"><h1>Calendar</h1></div>${bar}${body}<div class="legend" aria-label="Legend">${Object.keys(L.CATEGORIES).map(catPill).join('')}<span class="cat-pill" style="background:var(--color-surface-subtle);color:var(--color-text-secondary)">${ic('chores', 14)}Chore</span></div>`;
 }
@@ -433,9 +486,9 @@ function viewProfile() {
     : `<div class="panel-soft" style="margin-bottom:16px"><p class="small"><strong>${ic('info', 14)}Local only — no account or sync yet</strong></p><p class="hint" style="margin-top:4px">This interim profile is saved in this browser on this device. Sign in to get a real synced profile.</p></div>`;
 
   const form = `<form data-inline="profile" novalidate style="padding-top:12px">
-    <div class="field"><label for="f-dietary">Dietary restrictions / preferences <span class="opt">(optional)</span></label><textarea id="f-dietary" name="dietary" class="qa-notes" maxlength="300" placeholder="e.g. Vegetarian, no nuts">${esc(p.dietary)}</textarea><p class="field-error" id="err-dietary" hidden></p></div>
+    <div class="field"><label for="f-dietary">Dietary restrictions / preferences <span class="opt">(optional)</span></label><textarea id="f-dietary" name="dietary" maxlength="300" data-counter placeholder="e.g. Vegetarian, no nuts">${esc(p.dietary)}</textarea>${counter('f-dietary', (p.dietary || '').length, 300)}<p class="field-error" id="err-dietary" hidden></p></div>
     ${field('budgetCents', 'Personal monthly budget (USD)', input('budgetCents', budgetVal, 'inputmode="decimal" placeholder="0.00" autocomplete="off"'), { optional: true, hint: 'Just for you. Kasa shows this as information only and never blocks spending.' })}
-    <div class="field"><label for="f-rules">Personal roommate rules <span class="opt">(optional)</span></label><textarea id="f-rules" name="rules" class="qa-notes" maxlength="300" placeholder="e.g. Please knock before coming into my room">${esc(p.rules)}</textarea><p class="field-error" id="err-rules" hidden></p></div>
+    <div class="field"><label for="f-rules">Personal roommate rules <span class="opt">(optional)</span></label><textarea id="f-rules" name="rules" maxlength="300" data-counter placeholder="e.g. Please knock before coming into my room">${esc(p.rules)}</textarea>${counter('f-rules', (p.rules || '').length, 300)}<p class="field-error" id="err-rules" hidden></p></div>
     <button type="submit" class="btn primary">Save profile</button></form>`;
   const mine = sec('me-profile', `Your profile`, form, { icon: 'user' });
   const othersBlock = others.length
@@ -458,9 +511,10 @@ function viewNotifications() {
 }
 
 // ---------- Settings ----------
-// Shared "House expectations" list (Requirement 3). Each item shows its text with a light
-// who/when line and Edit/Remove controls; an "Add expectation" row opens a small modal.
-function expectationsSection() {
+// Shared "House expectations" (Requirement 3), shown on Home as a collapsed card whose summary line
+// previews the content. Expanding shows every item with Edit/Remove and an "Add expectation" button.
+const trunc = (t, n) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+function expectationsCard() {
   const list = store.state.expectations || [];
   const stamp = (e) => {
     const changed = e.updatedAt && e.updatedAt !== e.createdAt;
@@ -469,34 +523,29 @@ function expectationsSection() {
     return byId ? `<div class="row-meta"><span>${verb} by ${esc(who(byId))}</span></div>` : '';
   };
   const row = (e) => `<li class="row" id="expect-${e.id}"><div class="row-main"><div class="row-title">${esc(e.text)}</div>${stamp(e)}</div>
-    <div class="row-side"><button type="button" class="btn quiet sm" data-action="edit-expectation" data-id="${e.id}" aria-label="Edit expectation: ${esc(e.text)}">${ic('edit', 16)}Edit</button>${menu({ id: `exp-${e.id}`, label: `More actions for expectation: ${e.text}`, items: [{ label: 'Remove expectation', icon: 'trash', action: 'remove-expectation', data: { id: e.id }, danger: true }] })}</div></li>`;
+    <div class="row-side"><button type="button" class="btn sm" data-action="edit-expectation" data-id="${e.id}" aria-label="Edit expectation: ${esc(e.text)}">${ic('edit', 16)}Edit</button>${menu({ id: `exp-${e.id}`, label: `More actions for expectation: ${e.text}`, items: [{ label: 'Remove expectation', icon: 'trash', action: 'remove-expectation', data: { id: e.id }, danger: true }] })}</div></li>`;
   const body = (list.length ? `<ul class="list">${list.map(row).join('')}</ul>` : empty('No expectations yet', 'Agree on shared norms like “quiet after 11pm” or “dishes done same day”.')) + addRow('add-expectation', 'Add expectation');
-  return sec('expect', 'House expectations', body, { count: list.length || null });
+  const sub = list.length ? `“${esc(trunc(list[0].text, 48))}”${list.length > 1 ? `, +${list.length - 1} more` : ''}` : 'None yet. Add the first one';
+  return disclosure('expect', 'House expectations', body, { count: list.length || null, sub, hint: 'View &amp; edit' });
 }
-// Shared "Purchasing rules" block (Requirement 4): budget, preferred products, store preferences.
-function purchasingRulesSection() {
+// Shared "Purchasing rules" (Requirement 4): budget, preferred products, store preferences. Home card;
+// products and stores are compact removable chips.
+function purchasingRulesCard() {
   const p = store.state.purchasing || { budgetCents: null, preferredProducts: [], storePreferences: [] };
-  const budget = p.budgetCents != null
-    ? `<p style="padding-top:12px">Shared monthly budget: <strong class="money">${money(p.budgetCents)}</strong></p><p style="margin-top:8px"><button type="button" class="btn sm" data-action="set-budget">Change budget</button></p>`
-    : `<p class="small muted" style="padding-top:12px">No shared budget set. Set one to track monthly spending against it.</p><p style="margin-top:8px"><button type="button" class="btn sm" data-action="set-budget">Set budget</button></p>`;
-  const listBlock = (title, items, addAction, addLabel, removeAction, kind) => {
-    const rows = items.length
-      ? `<ul class="list">${items.map((it) => `<li class="row"><div class="row-main"><div class="row-title">${esc(it.text)}</div></div><div class="row-side"><button type="button" class="btn quiet sm" data-action="${removeAction}" data-id="${it.id}" aria-label="Remove ${kind}: ${esc(it.text)}">${ic('trash', 16)}Remove</button></div></li>`).join('')}</ul>`
-      : `<p class="small muted" style="padding-top:8px">None yet.</p>`;
-    return `<h3 style="margin-top:16px">${esc(title)}</h3>${rows}${addRow(addAction, addLabel)}`;
-  };
-  return sec('purchrules', 'Purchasing rules', `${budget}
-    ${listBlock('Preferred products', p.preferredProducts || [], 'add-preferred-product', 'Add preferred product', 'remove-preferred-product', 'preferred product')}
-    ${listBlock('Store preferences', p.storePreferences || [], 'add-store-preference', 'Add store preference', 'remove-store-preference', 'store preference')}
-    <p class="hint">Shared buying standards. They appear as non-blocking guidance in the shopping flow — Kasa never blocks spending.</p>`, { icon: 'cart' });
+  const pp = p.preferredProducts || [], sp = p.storePreferences || [];
+  const hasBudget = p.budgetCents != null;
+  const budget = `<div class="rules-budget"><div><span class="budget-label">Shared monthly budget</span><br>${hasBudget ? `<strong class="money">${money(p.budgetCents)}</strong>` : '<span class="muted">Not set</span>'}</div><button type="button" class="btn sm" data-action="set-budget">${hasBudget ? 'Change budget' : 'Set budget'}</button></div>`;
+  const chips = (title, items, addAction, addLabel, removeAction, kind) => `<div class="rules-block"><h3>${esc(title)}</h3><div class="chip-list">${items.map((it) => `<span class="chip-item">${esc(it.text)}<button type="button" data-action="${removeAction}" data-id="${it.id}" aria-label="Remove ${kind}: ${esc(it.text)}">${ic('x', 14)}</button></span>`).join('')}<button type="button" class="chip-add" data-action="${addAction}">${ic('plus', 14)}${esc(addLabel)}</button></div></div>`;
+  const body = `${budget}${chips('Preferred products', pp, 'add-preferred-product', 'Add product', 'remove-preferred-product', 'preferred product')}${chips('Store preferences', sp, 'add-store-preference', 'Add store', 'remove-store-preference', 'store preference')}
+    <p class="hint">Shared buying standards. They appear as non-blocking guidance in the shopping flow. Kasa never blocks spending.</p>`;
+  const sub = [hasBudget ? `${money(p.budgetCents)} budget` : 'No budget set', plural(pp.length, 'product'), plural(sp.length, 'store')].join(' · ');
+  return disclosure('purchrules', 'Shared purchasing rules', body, { sub, hint: 'View &amp; edit' });
 }
 function viewSettings() {
   const s = store.state, p = store.prefsOf(store.me());
   const toggleRow = (nm, label, checked) => `<label class="inline-check"><input type="checkbox" name="${nm}" ${checked ? 'checked' : ''} data-change="pref"> ${label}</label>`;
   return `<div class="page-head"><h1>Settings</h1></div>
   ${sec('hh', 'Household', `<p style="padding-top:12px"><strong style="color:var(--color-text)">${esc(s.household.name)}</strong></p><p class="small muted">${s.members.map((m) => esc(m.name)).join(', ')}</p><p class="small" style="margin-top:8px">${s.mode === 'demo' ? 'This is a demo household with fictional roommates.' : 'Your household.'} Use <strong>Viewing as</strong> to switch between roommates.</p>`)}
-  ${expectationsSection()}
-  ${purchasingRulesSection()}
   ${sec('pref', `Reminders for ${name(store.me())}`, `<form data-inline="prefs" style="padding-top:12px">${toggleRow('reminders', 'Remind me when my chores are due soon or overdue', p.reminders)}
     <div class="field" style="max-width:320px;margin-top:8px"><label for="f-leadDays">Remind me</label>${select('leadDays', [[0, 'On the day it’s due'], [1, '1 day before'], [2, '2 days before']], p.leadDays, 'data-change="pref"')}</div>
     ${toggleRow('updates', 'Tell me about assignments, shared expenses and calendar changes', p.updates)}</form><p class="hint">Reminders appear in Kasa’s notification list while the app is open. Background push, email and text messages aren’t part of this version.</p>`)}
@@ -515,10 +564,10 @@ function viewSettings() {
 const roommateRow = (i) => `<div class="roommate-row"><input type="text" name="others[]" aria-label="Roommate ${i} name" maxlength="30" placeholder="Roommate ${i}">${i > 1 ? `<button type="button" class="icon-btn" data-action="remove-roommate" aria-label="Remove roommate ${i}">${ic('x')}</button>` : '<span aria-hidden="true"></span>'}</div>`;
 function viewWelcome() {
   const create = ui.welcome === 'create';
-  return `<main id="main" class="welcome" tabindex="-1"><div><span class="logo">${ic('home', 22)}</span></div>
+  return `<main id="main" class="welcome" tabindex="-1"><div class="brand-row"><span class="logo">${logoMark(44)}</span><span class="wordmark" aria-hidden="true">Kasa</span></div>
   <div><h1>Know what needs to happen, without chasing your roommates.</h1><p class="lead">Chores, shared expenses, shopping and plans in one place.</p></div>
   <div class="choices">
-  ${session.canSignIn() ? `<button type="button" class="choice primary" data-action="sign-in-google"><span><strong>Continue with Google</strong><span class="d">Sign in to sync your profile across devices</span></span></button>` : ''}
+  ${session.canSignIn() ? `<button type="button" class="choice primary" data-action="sign-in-google"><span><strong>${isMockAuth() ? 'Continue with Google (dummy account)' : 'Continue with Google'}</strong><span class="d">${isMockAuth() ? 'Skips real sign-in: you’re signed in as a dummy user, saved in this browser' : 'Sign in to sync your profile across devices'}</span></span></button>` : ''}
   <button type="button" class="choice${session.canSignIn() ? '' : ' primary'}" data-action="start-demo"><span><strong>Try the demo</strong><span class="d">Four sample roommates, no sign-in — stays on this device</span></span></button>
   ${session.canSignIn()
     // Backend configured: real (synced) households are created by signing in, not locally.
@@ -564,7 +613,7 @@ function openChoreForm(occ) {
   const form = openModal({
     title: occ ? 'Edit chore' : 'Add chore', submitLabel: occ ? 'Save changes' : 'Add chore',
     body: `<div class="field" style="margin-bottom:4px"><label class="sr-only" for="f-title">Chore</label><input type="text" id="f-title" name="title" class="qa-title" value="${esc(occ ? occ.title : '')}" placeholder="Chore name" maxlength="80" autocomplete="off" aria-required="true"><p class="field-error" id="err-title" hidden></p></div>
-      <div class="field"><label class="sr-only" for="f-notes">Notes (optional)</label><textarea id="f-notes" name="notes" class="qa-notes" maxlength="300" placeholder="Notes (optional)">${esc(occ ? occ.notes : '')}</textarea></div>
+      <div class="field"><label class="sr-only" for="f-notes">Notes (optional)</label><textarea id="f-notes" name="notes" maxlength="300" placeholder="Notes (optional)">${esc(occ ? occ.notes : '')}</textarea></div>
       <div class="row2 stack-sm">${field('assigneeId', 'Assigned to', select('assigneeId', memberOpts(), occ ? occ.assigneeId : store.me()))}${field('due', 'Due date', `<input type="date" id="f-due" name="due" value="${occ ? occ.due : today()}">`)}</div>
       <div class="field"><label id="rec-l">Repeats</label>${segmented('recurrence', [['once', 'One time'], ['weekly', 'Weekly']], c ? c.recurrence : 'once', 'data-change="chore-form"')}</div>
       <div id="rotate-wrap" hidden><label class="inline-check"><input type="checkbox" name="rotate" data-change="chore-form" ${rotating ? 'checked' : ''}> Rotate between roommates</label>
@@ -655,7 +704,7 @@ function openEventForm(ev, preset = {}) {
   openModal({
     title: ev ? 'Edit event' : 'Add event', submitLabel: ev ? 'Save changes' : 'Add event',
     body: `<div class="field" style="margin-bottom:4px"><label class="sr-only" for="f-title">Title</label><input type="text" id="f-title" name="title" class="qa-title" value="${esc(ev ? ev.title : '')}" placeholder="Event title, e.g. Quiet study time" maxlength="80" autocomplete="off"><p class="field-error" id="err-title" hidden></p></div>
-      <div class="field"><label class="sr-only" for="f-notes">Notes (optional)</label><textarea id="f-notes" name="notes" class="qa-notes" maxlength="300" placeholder="Notes (optional)">${esc(ev ? ev.notes : '')}</textarea></div>
+      <div class="field"><label class="sr-only" for="f-notes">Notes (optional)</label><textarea id="f-notes" name="notes" maxlength="300" placeholder="Notes (optional)">${esc(ev ? ev.notes : '')}</textarea></div>
       ${field('category', 'Type', select('category', Object.entries(L.CATEGORIES).map(([k, v]) => [k, v.hint]), ev ? ev.category : 'quiet'))}
       <div class="row2 stack-sm">${field('startDate', 'Starts', dt('startDate', sd))}${field('startTime', 'Start time', tm('startTime', ev ? L.dtTime(ev.start) : '19:00'))}</div>
       <div class="row2 stack-sm">${field('endDate', 'Ends', dt('endDate', ed))}${field('endTime', 'End time', tm('endTime', ev ? L.dtTime(ev.end) : '21:00'))}</div>`,
@@ -690,7 +739,7 @@ function openTradeForm(occId) {
 function openExpectationForm(exp) {
   openModal({
     title: exp ? 'Edit expectation' : 'Add expectation', submitLabel: exp ? 'Save changes' : 'Add expectation',
-    body: `<div class="field"><label class="sr-only" for="f-text">Expectation</label><textarea id="f-text" name="text" class="qa-notes" maxlength="300" placeholder="e.g. Quiet after 11pm on weeknights" aria-required="true">${esc(exp ? exp.text : '')}</textarea><p class="field-error" id="err-text" hidden></p></div>`,
+    body: `<div class="field"><label class="sr-only" for="f-text">Expectation</label><textarea id="f-text" name="text" maxlength="300" placeholder="e.g. Quiet after 11pm on weeknights" aria-required="true">${esc(exp ? exp.text : '')}</textarea><p class="field-error" id="err-text" hidden></p></div>`,
     onSubmit: (d) => {
       const res = exp ? store.editExpectation(exp.id, d.text) : store.addExpectation(d.text);
       if (res.ok) toast(exp ? 'Expectation updated.' : 'Expectation added.');
@@ -819,10 +868,9 @@ const actions = {
   },
   'delete-chore': (d) => { const o = byId(store.state.occurrences, d.id); confirmDialog({ title: 'Delete this chore?', message: `<strong>${esc(o.title)}</strong> and its upcoming occurrences will be removed. Completed history is kept.`, confirmLabel: 'Delete chore', onConfirm: () => { store.deleteChore(d.id); afterDelete(); } }); },
   'stats-week': (d) => { ui.statsWeek = Number(d.delta) === 0 ? L.startOfWeek(today()) : L.addDays(ui.statsWeek, Number(d.delta)); render(); },
-  'cal-shift': (d) => { ui.calSel = L.addDays(ui.calSel || today(), Number(d.delta)); render(); },
+  'cal-shift': (d) => { const cur = ui.calSel || today(); ui.calSel = d.months ? L.addMonths(cur, Number(d.months)) : L.addDays(cur, Number(d.delta)); render(); },
   'cal-today': () => { ui.calSel = today(); render(); },
   'cal-pick': (d) => { ui.calSel = d.date; render(); },
-  'cal-open-day': (d) => { ui.calSel = d.date; ui.calView = 'agenda'; render(); },
   'cal-view': (d) => { ui.calView = d.view; render(); },
   'add-expense': () => openExpenseForm(null),
   'edit-expense': (d) => openExpenseForm(byId(store.state.expenses, d.id)),
@@ -881,7 +929,11 @@ document.addEventListener('change', (e) => {
   else if (k === 'pref-channels') { const f = el.form; store.setPrefs({ channels: { inApp: true, push: f.elements.push.checked, sms: f.elements.sms.checked } }); toast('Notification channels saved.'); }
   else if (el.name === 'participantIds[]' && el.form) updateSplitPreview(el.form);
 });
-document.addEventListener('input', (e) => { if (e.target.hasAttribute?.('data-preview')) updateSplitPreview(e.target.form); });
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t.hasAttribute?.('data-preview')) updateSplitPreview(t.form);
+  if (t.hasAttribute?.('data-counter')) { const c = document.getElementById(`count-${t.id}`); if (c) c.textContent = `${t.value.length} / ${t.maxLength}`; }
+});
 document.addEventListener('toggle', (e) => { const k = e.target.dataset?.key; if (k) ui.open[k] = e.target.open; }, true);
 // A link in a disclosure summary should navigate without toggling the dropdown open/closed.
 // Native <details> toggles when the summary is clicked; preventDefault cancels that toggle,
@@ -935,7 +987,7 @@ function render() {
   const navLinks = (side) => NAV.map(([k, href, label, icon, short]) => `<a ${side ? 'class="nav"' : ''} href="${href}"${k === key ? ' aria-current="page"' : ''} aria-label="${esc(label)}">${ic(icon, side ? 20 : 22)}<span aria-hidden="true">${side ? label : short}</span></a>`).join('');
   const bell = `<a class="icon-link" href="#/notifications" aria-label="Notifications${unread ? `, ${unread} unread` : ''}"${key === 'notifications' ? ' aria-current="page"' : ''}>${ic('bell', 20)}${unread ? `<span class="badge-count" aria-hidden="true">${unread > 9 ? '9+' : unread}</span>` : ''}</a>`;
   const gear = `<a class="icon-link" href="#/settings" aria-label="Settings"${key === 'settings' ? ' aria-current="page"' : ''}>${ic('gear', 20)}</a>`;
-  const household = `<a class="household" href="#/home" title="${esc(s.household.name)}" aria-label="${esc(s.household.name)}, home"><span class="logo">${ic('home', 16)}</span><span class="t">${esc(s.household.name)}</span></a>`;
+  const household = `<a class="household" href="#/home" title="${esc(s.household.name)}" aria-label="${esc(s.household.name)}, home"><span class="logo">${logoMark(28)}</span><span class="t">${esc(s.household.name)}</span></a>`;
   const viewerSelect = (label) => `<label for="switch-user">${label}</label><select id="switch-user" data-change="switch-user">${s.members.map((m) => `<option value="${m.id}"${m.id === s.currentUserId ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>`;
   const modeName = s.mode === 'demo' ? 'Demo' : 'Local';
   // Phones: the roommate switcher lives inside the demo controls so the header stays quiet; the chip still names who you are viewing as.
@@ -960,20 +1012,20 @@ function render() {
 // Authenticated but no household yet: create / join / import the local demo data (R5, R7).
 function viewAccountOnboarding() {
   const hasLocal = (() => { try { return !!storage.getItem(STORAGE_KEY); } catch { return false; } })();
-  return `<main id="main" class="welcome" tabindex="-1"><div><span class="logo">${ic('home', 22)}</span></div>
-  <div><h1>You’re signed in. Let’s set up your household.</h1><p class="lead">Create a new household, join one with an invite code${hasLocal ? ', or bring in the data you already have on this device' : ''}.</p></div>
+  return `<main id="main" class="welcome" tabindex="-1"><div class="brand-row"><span class="logo">${logoMark(44)}</span><span class="wordmark" aria-hidden="true">Kasa</span></div>
+  <div><h1>You’re signed in. Let’s set up your household.</h1>${isMockAuth() ? '<p class="small muted">Dummy account (dummy.user@example.com) — nothing is sent to a server.</p>' : ''}<p class="lead">Create a new household, join one with an invite code${hasLocal ? ', or bring in the data you already have on this device' : ''}.</p></div>
   ${hasLocal ? `<section class="create-form"><div class="sec-head" style="border:0"><h2>Import your existing household</h2></div>
     <p class="small">You have a household saved on this device. Import it into your account — your local copy is kept until the import succeeds.</p>
     <p style="margin-top:12px"><button type="button" class="btn primary" data-action="hh-import">Import my household</button></p></section>` : ''}
   <section class="create-form"><div class="sec-head" style="border:0"><h2 id="h-hh-create">Create a household</h2></div>
     <div class="hh-form">
-    ${field('displayName', 'Your display name', input('displayName', '', 'maxlength="30" autocomplete="given-name"'))}
-    ${field('householdName', 'Household name', input('householdName', '', 'maxlength="60" placeholder="e.g. Elm Street 3B"'))}
+    ${field('displayName', 'Your display name', input('displayName', isMockAuth() ? 'Alex' : '', 'maxlength="30" autocomplete="given-name"'))}
+    ${field('householdName', 'Household name', input('householdName', isMockAuth() ? 'Elm Street 3B' : '', 'maxlength="60" placeholder="e.g. Elm Street 3B"'))}
     <button type="button" class="btn${hasLocal ? '' : ' primary'}" data-action="hh-create" style="width:100%">Create household</button></div></section>
   <section class="create-form"><div class="sec-head" style="border:0"><h2>Join with an invite code</h2></div>
     <div class="hh-form">
-    ${field('code', 'Invite code', input('code', '', 'maxlength="8" autocapitalize="characters" placeholder="e.g. K7P2Q9MX"'))}
-    ${field('displayName', 'Your display name', input('displayName', '', 'maxlength="30"'))}
+    ${field('code', 'Invite code', input('code', isMockAuth() ? 'DUMMY123' : '', 'maxlength="8" autocapitalize="characters" placeholder="e.g. K7P2Q9MX"'))}${isMockAuth() ? '<p class="hint">Dummy mode: any code joins a sample household.</p>' : ''}
+    ${field('displayName', 'Your display name', input('displayName', isMockAuth() ? 'Alex' : '', 'maxlength="30"'))}
     <button type="button" class="btn" data-action="hh-join" style="width:100%">Join household</button></div></section>
   <p style="margin-top:8px"><button type="button" class="btn quiet sm" data-action="sign-out">Sign out</button></p></main>`;
 }
@@ -982,6 +1034,7 @@ function viewLoadError() {
 }
 function afterRender(route, sig) {
   const hash = location.hash;
+  if (ui.scrollTo) { const el = $(`[data-key="${CSS.escape(ui.scrollTo)}"]`, app); ui.scrollTo = null; if (el) { el.scrollIntoView({ block: 'center' }); $('summary', el)?.focus({ preventScroll: true }); return; } }
   if (ui.handled !== hash) {
     ui.handled = hash;
     const id = route.query.id;

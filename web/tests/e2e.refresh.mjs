@@ -91,13 +91,17 @@ async function run(width, height) {
   await page.getByRole('heading', { level: 2, name: /20\d\d/ }).waitFor();
   await page.getByRole('button', { name: 'Today', exact: true }).click();
   assert.equal(await todayBtn.getAttribute('aria-pressed'), 'true');
-  await page.getByRole('radio', { name: 'Week' }).check({ force: true });
-  await page.locator('.wk-head').nth(0).waitFor();
-  await shot('calendar-week');
-  await page.locator('.wk-head').last().click();
-  await page.getByRole('radio', { name: 'Agenda' }).waitFor();
+  await page.getByRole('radio', { name: 'Month' }).check({ force: true });
+  await page.locator('.mo-num').nth(0).waitFor();
+  await shot('calendar-month');
+  const monthTitle = await page.locator('.cal-title h2').innerText();
+  await page.getByRole('button', { name: 'Next month' }).click();
+  assert.notEqual(await page.locator('.cal-title h2').innerText(), monthTitle, 'Next month changes the heading');
+  await page.getByRole('button', { name: 'Today', exact: true }).click();
+  await page.locator('.mo-num').last().click();
+  await page.getByRole('radio', { name: 'Agenda' }).check({ force: true });
   assert.ok(await page.locator('.ds-day[aria-pressed="true"]').count() === 1);
-  step(`${width}px: date strip selects the day and agenda follows; today stays marked; week/next/Today navigation; week day opens agenda`);
+  step(`${width}px: date strip selects the day and agenda follows; today stays marked; week/next/Today navigation; month view navigates and a picked day carries into the agenda`);
 
   // Event details open from the agenda; chore rows open chore details
   await page.getByRole('button', { name: 'Today', exact: true }).click();

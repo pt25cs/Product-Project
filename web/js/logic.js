@@ -30,9 +30,33 @@ export function diffDays(a, b) {
   const A = parseDate(a), B = parseDate(b);
   return Math.round((Date.UTC(B.getFullYear(), B.getMonth(), B.getDate()) - Date.UTC(A.getFullYear(), A.getMonth(), A.getDate())) / 86400000);
 }
+/** Add n calendar months, clamping the day (Jan 31 + 1 month -> Feb 28/29). */
+export function addMonths(s, n) {
+  const d = parseDate(s), day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + n);
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, last));
+  return toDateStr(d);
+}
 /** Weeks start on Monday. */
 export function startOfWeek(s) {
   return addDays(s, -((parseDate(s).getDay() + 6) % 7));
+}
+/**
+ * Whole-week grid for the month containing `s`: an array of weeks (Monday first), each 7 cells
+ * `{ date, inMonth }`. Leading/trailing days from adjacent months are flagged `inMonth: false`.
+ */
+export function monthGrid(s) {
+  const d = parseDate(s);
+  const first = toDateStr(new Date(d.getFullYear(), d.getMonth(), 1));
+  const last = toDateStr(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+  const ym = first.slice(0, 7);
+  const weeks = [];
+  for (let w = startOfWeek(first); w <= addDays(startOfWeek(last), 6); w = addDays(w, 7)) {
+    weeks.push(Array.from({ length: 7 }, (_, i) => { const date = addDays(w, i); return { date, inMonth: date.slice(0, 7) === ym }; }));
+  }
+  return weeks;
 }
 export const dtDate = (s) => s.slice(0, 10);
 export const dtTime = (s) => s.slice(11, 16);

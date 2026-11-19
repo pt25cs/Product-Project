@@ -35,7 +35,7 @@ async function run(width, height) {
 
   // 1. Home title opens details for a chore with notes + recurrence + rotation, without changing anything
   const before = await snapshot();
-  const titleBtn = page.getByRole('button', { name: 'Take out trash & recycling', exact: true }).first();
+  const titleBtn = page.getByRole('button', { name: /^Take out trash & recycling/ }).first();
   await titleBtn.focus();
   await page.keyboard.press('Enter');
   await dialog.waitFor();
@@ -49,12 +49,12 @@ async function run(width, height) {
   await shot('details-notes');
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'hidden' });
-  assert.equal(await st(() => document.activeElement.textContent.trim()), 'Take out trash & recycling', 'focus returns to the title');
+  assert.match(await st(() => document.activeElement.textContent.trim()), /^Take out trash & recycling/, 'focus returns to the chore row button');
   assert.equal(await snapshot(), before, 'opening and closing changes nothing');
   step(`${width}px: Home title opens correct details (keyboard), Escape closes, focus returns, data untouched`);
 
   // 2. no notes / non-recurring: optional sections omitted
-  await page.getByRole('button', { name: 'Wipe stovetop', exact: true }).click();
+  await page.getByRole('button', { name: /^Wipe stovetop/ }).click();
   const txt = await dialog.innerText();
   assert.ok(!/Notes/.test(txt) && !/Repeats/.test(txt) && !/rotation/i.test(txt), 'optional sections omitted');
   await page.getByRole('button', { name: 'Close', exact: true }).click();
@@ -76,7 +76,7 @@ async function run(width, height) {
   // 4. All chores: someone else's chore shows the correct assignee; opening it does not modify anything
   await page.goto(`${BASE}#/chores/all`);
   const b2 = await snapshot();
-  await page.getByRole('button', { name: 'Deep-clean kitchen', exact: true }).click();
+  await page.getByRole('button', { name: /^Deep\-clean kitchen/ }).click();
   assert.match(await dialog.innerText(), /Assigned to\s+Jordan/);
   assert.match(await dialog.innerText(), /overdue/);
   assert.match(await dialog.innerText(), /Next in rotation\s+Priya/);
@@ -87,7 +87,7 @@ async function run(width, height) {
   // 5. Complete through dialog; one next occurrence; Undo; repeated clicks harmless
   await page.goto(`${BASE}#/home`);
   const n0 = await st(() => window.__roomsync.state.occurrences.length);
-  await page.getByRole('button', { name: 'Take out trash & recycling', exact: true }).first().click();
+  await page.getByRole('button', { name: /^Take out trash & recycling/ }).first().click();
   await dialog.getByRole('button', { name: 'Mark complete' }).dblclick();
   await page.getByText('Completed Take out trash & recycling.').waitFor();
   await dialog.waitFor({ state: 'hidden' });
@@ -101,7 +101,7 @@ async function run(width, height) {
   step(`${width}px: Mark complete uses existing completion + Undo; no duplicates; lists update`);
 
   // 6. Edit from details opens the existing editor with the record
-  await page.getByRole('button', { name: 'Take out trash & recycling', exact: true }).first().click();
+  await page.getByRole('button', { name: /^Take out trash & recycling/ }).first().click();
   await dialog.getByRole('button', { name: 'Edit' }).click();
   await page.getByRole('heading', { name: 'Edit chore' }).waitFor();
   assert.equal(await page.getByRole('textbox', { name: 'Chore' }).inputValue(), 'Take out trash & recycling');

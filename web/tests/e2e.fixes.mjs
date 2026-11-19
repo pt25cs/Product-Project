@@ -89,6 +89,7 @@ for (const w of [360, 390]) {
   const page = await open(390, 844);
   await page.goto(`${BASE}#/calendar`);
   await page.getByRole('radio', { name: 'Agenda' }).check({ force: true });
+  await page.getByRole('radio', { name: 'Agenda' }).check({ force: true });
   const days = page.locator('.ds-day');
   const focusedLabel = () => page.evaluate(() => document.activeElement.getAttribute('aria-label'));
   const todayLabel = await page.locator('.ds-day[aria-current="date"]').getAttribute('aria-label');
@@ -118,8 +119,8 @@ for (const w of [360, 390]) {
   // Next week keeps focus on Next week; view switch keeps focus on its radio
   await page.getByRole('button', { name: 'Next week' }).focus(); await page.keyboard.press('Enter');
   assert.equal(await focusedLabel(), 'Next week', 'focus stays on Next week (was jumping to Previous week)');
-  await page.getByRole('radio', { name: 'Week' }).focus(); await page.keyboard.press('Space');
-  assert.equal(await page.evaluate(() => document.activeElement.value), 'week', 'focus stays on the Week radio');
+  await page.getByRole('radio', { name: 'Month' }).focus(); await page.keyboard.press('Space');
+  assert.equal(await page.evaluate(() => document.activeElement.value), 'month', 'focus stays on the Month radio');
   await page.getByRole('radio', { name: 'Agenda' }).focus(); await page.keyboard.press('Space');
   // no unexpected scrolling when activating a date
   await page.evaluate(() => window.scrollTo(0, 0));

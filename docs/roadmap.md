@@ -79,6 +79,8 @@ non-blocking in Phase 2, so this does not block the phase). See the spec at
 `.kiro/specs/accounts-identity-v2/` and `docs/phase-2-setup.md`. Front-end polish items (F1–F3)
 tracked in the spec's tasks.
 
+**Front-end refinement v1 (implemented):** House expectations and Shared purchasing rules moved from Settings to collapsed Home cards; bold budget card with progress bar; month calendar; clearer buttons/sections; indigo/salmon/white brand refresh with the Round-table logo. See `.kiro/specs/frontend-refinement-v1/`.
+
 ---
 
 ## Phase 3 — Push and SMS delivery _(after accounts)_
